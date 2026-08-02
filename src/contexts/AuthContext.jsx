@@ -20,14 +20,16 @@ export const AuthProvider = ({ children }) => {
       setSession(session);
       
       if (session?.user) {
-        // 從 user_roles 取得該使用者的角色
+        // 同時拉取該角色對應的球隊資訊 (使用 inner join 寫法)
         const { data: roles, error } = await supabase
           .from('user_roles')
-          .select('role, team_id, teams(name, status)')
+          .select('*, teams(*)')
           .eq('user_id', session.user.id);
           
         if (!error && roles) {
           setUserRoles(roles);
+        } else {
+          console.error("AuthContext fetch error:", error);
         }
       } else {
         setUserRoles([]);
@@ -37,13 +39,12 @@ export const AuthProvider = ({ children }) => {
 
     fetchSessionAndRoles();
 
-    // 監聽登入狀態改變
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, newSession) => {
       setSession(newSession);
       if (newSession?.user) {
-        const { data: roles } = await supabase
+        const { data: roles, error } = await supabase
           .from('user_roles')
-          .select('role, team_id, teams(name, status)')
+          .select('*, teams(*)')
           .eq('user_id', newSession.user.id);
         setUserRoles(roles || []);
       } else {

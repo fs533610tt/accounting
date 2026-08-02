@@ -31,8 +31,7 @@ const Login = () => {
       
       <div className="glass-panel login-card">
         <div className="login-header">
-          <h2>福山國小桌球隊</h2>
-          <p>內部作帳管理系統</p>
+          <h2>作帳系統</h2>
         </div>
         
         <div className="login-body">

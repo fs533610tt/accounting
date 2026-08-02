@@ -23,9 +23,8 @@ dist-ssr
 *.sln
 *.sw?
 
-# Ignore docs
-docs/
 
 # Env files
 .env
 .env.*
+!.env.example
