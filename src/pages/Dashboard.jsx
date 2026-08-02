@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { supabase } from '../config/supabaseClient';
 import { useAuth } from '../contexts/AuthContext';
 import TeamManagement from '../components/TeamManagement';
 import StudentList from '../components/StudentList';
@@ -20,6 +21,32 @@ const Dashboard = () => {
 
   const handleSubTabChange = (teamId, tab) => {
     setTeamSubTabs(prev => ({ ...prev, [teamId]: tab }));
+  };
+
+  const handleCreateTeam = async () => {
+    const teamName = window.prompt('請輸入新球隊名稱：');
+    if (!teamName) return;
+    
+    const { error } = await supabase.rpc('create_new_team', { new_team_name: teamName });
+    if (error) {
+      alert('建立失敗：' + error.message);
+    } else {
+      alert('球隊建立成功！請重新整理頁面。');
+      window.location.reload();
+    }
+  };
+
+  const handleJoinTeam = async () => {
+    const code = window.prompt('請輸入邀請碼：');
+    if (!code) return;
+    
+    const { error } = await supabase.rpc('join_team_by_code', { invite_code: code });
+    if (error) {
+      alert('加入失敗：' + error.message);
+    } else {
+      alert('成功加入球隊！請重新整理頁面。');
+      window.location.reload();
+    }
   };
 
   return (
@@ -152,8 +179,8 @@ const Dashboard = () => {
             <h3>您尚未加入任何球隊</h3>
             <p style={{ color: 'var(--text-secondary)', marginBottom: '24px' }}>如果您要建立新球隊，請點擊下方按鈕申請；或是輸入邀請碼加入現有球隊。</p>
             <div style={{ display: 'flex', gap: '16px', justifyContent: 'center' }}>
-              <button className="btn-primary" onClick={() => alert('申請功能即將推出！')} style={{ maxWidth: '200px', cursor: 'pointer' }}>申請建立球隊</button>
-              <button className="btn-primary" onClick={() => alert('邀請碼功能即將推出！')} style={{ maxWidth: '200px', backgroundColor: 'transparent', border: '1px solid white', color: 'white', cursor: 'pointer' }}>輸入邀請碼</button>
+              <button className="btn-primary" onClick={handleCreateTeam} style={{ maxWidth: '200px', cursor: 'pointer' }}>申請建立球隊</button>
+              <button className="btn-primary" onClick={handleJoinTeam} style={{ maxWidth: '200px', backgroundColor: 'transparent', border: '1px solid white', color: 'white', cursor: 'pointer' }}>輸入邀請碼</button>
             </div>
           </div>
         )}

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../config/supabaseClient';
 import PrintEnvelope from './PrintEnvelope';
+import * as XLSX from 'xlsx';
 
 const BillingDetail = ({ cycleId, onBack }) => {
   const [cycle, setCycle] = useState(null);
@@ -95,6 +96,30 @@ const BillingDetail = ({ cycleId, onBack }) => {
     return <PrintEnvelope cycle={cycle} records={records} onClose={() => setShowPrint(false)} />;
   }
 
+  const handleExportExcel = () => {
+    const exportData = records.map(record => {
+      let statusText = '未繳';
+      if (record.status === 'paid') statusText = '已繳清';
+      else if (record.status === 'partially_paid') statusText = '部分繳納';
+
+      return {
+        '學生姓名': record.students?.name || '未知',
+        '年級': record.students?.grade || '',
+        '班級': record.students?.class_name || '',
+        '身分': record.students?.is_officer ? '幹部' : '一般',
+        '應繳金額': record.amount_due,
+        '已繳金額': record.amount_paid,
+        '繳費狀態': statusText
+      };
+    });
+
+    const worksheet = XLSX.utils.json_to_sheet(exportData);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, '繳費明細');
+
+    XLSX.writeFile(workbook, `${cycle.name}_繳費明細.xlsx`);
+  };
+
   return (
     <div style={{ marginTop: '10px' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
@@ -104,12 +129,20 @@ const BillingDetail = ({ cycleId, onBack }) => {
         >
           ← 返回帳單總覽
         </button>
-        <button 
-          onClick={() => setShowPrint(true)}
-          style={{ background: '#fbbc05', color: '#000', border: 'none', padding: '8px 16px', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}
-        >
-          🖨️ 列印全隊學費袋
-        </button>
+        <div style={{ display: 'flex', gap: '10px' }}>
+          <button 
+            onClick={handleExportExcel}
+            style={{ background: '#217346', color: '#fff', border: 'none', padding: '8px 16px', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}
+          >
+            📊 匯出 Excel
+          </button>
+          <button 
+            onClick={() => setShowPrint(true)}
+            style={{ background: '#fbbc05', color: '#000', border: 'none', padding: '8px 16px', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}
+          >
+            🖨️ 列印全隊學費袋
+          </button>
+        </div>
       </div>
 
       <div style={{ background: 'rgba(255,255,255,0.05)', padding: '24px', borderRadius: '12px', marginBottom: '20px' }}>

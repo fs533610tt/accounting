@@ -9,10 +9,15 @@ export default defineConfig({
     __APP_VERSION__: JSON.stringify(new Date().toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' }))
   },
   build: {
+    chunkSizeWarningLimit: 1000,
     rollupOptions: {
       output: {
         manualChunks(id) {
           if (id.includes('node_modules')) {
+            if (id.includes('xlsx')) return 'vendor-xlsx';
+            if (id.includes('sweetalert2')) return 'vendor-swal';
+            if (id.includes('@supabase')) return 'vendor-supabase';
+            if (id.includes('react')) return 'vendor-react';
             return 'vendor';
           }
         }

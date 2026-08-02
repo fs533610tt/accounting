@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../config/supabaseClient';
+import Swal from 'sweetalert2';
+import * as XLSX from 'xlsx';
 
 const StudentList = ({ teamId }) => {
   const [students, setStudents] = useState([]);
@@ -61,7 +63,20 @@ const StudentList = ({ teamId }) => {
   };
 
   const handleDelete = async (id, name) => {
-    if (!window.confirm(`確定要刪除球員「${name}」嗎？這個操作無法復原。`)) return;
+    const result = await Swal.fire({
+      title: '確定要刪除嗎？',
+      text: `確定要刪除球員「${name}」嗎？這個操作無法復原。`,
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#ff6b6b',
+      cancelButtonColor: '#6c757d',
+      confirmButtonText: '是的，刪除！',
+      cancelButtonText: '取消',
+      background: '#1a1a2e',
+      color: '#fff'
+    });
+
+    if (!result.isConfirmed) return;
 
     const { error } = await supabase
       .from('students')
@@ -69,7 +84,7 @@ const StudentList = ({ teamId }) => {
       .eq('id', id);
 
     if (error) {
-      alert('刪除失敗：' + error.message);
+      Swal.fire({ title: '刪除失敗', text: error.message, icon: 'error', background: '#1a1a2e', color: '#fff' });
     } else {
       setStudents(students.filter(s => s.id !== id));
     }
@@ -108,7 +123,20 @@ const StudentList = ({ teamId }) => {
   };
 
   const handleBulkPromote = async () => {
-    if (!window.confirm('確定要執行「一鍵升級」嗎？\n系統會自動將所有一到五年級的學生升一級，六年級的學生會被標記為「畢業」。\n(請確認目前名單正確無誤再執行)')) return;
+    const result = await Swal.fire({
+      title: '確定要執行「一鍵升級」嗎？',
+      text: '系統會自動將所有一到五年級的學生升一級，六年級的學生會被標記為「畢業」。(請確認目前名單正確無誤再執行)',
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#4ade80',
+      cancelButtonColor: '#6c757d',
+      confirmButtonText: '是的，執行升級！',
+      cancelButtonText: '取消',
+      background: '#1a1a2e',
+      color: '#fff'
+    });
+
+    if (!result.isConfirmed) return;
 
     setLoading(true);
 
@@ -138,13 +166,34 @@ const StudentList = ({ teamId }) => {
       .select();
 
     if (error) {
-      alert('一鍵升級失敗：' + error.message);
+      Swal.fire({ title: '升級失敗', text: error.message, icon: 'error', background: '#1a1a2e', color: '#fff' });
     } else {
-      alert('一鍵升級完成！');
+      Swal.fire({ title: '完成！', text: '一鍵升級已成功執行。', icon: 'success', background: '#1a1a2e', color: '#fff' });
       setStudents(updatedStudents);
     }
     
     setLoading(false);
+  };
+
+  const handleExportExcel = () => {
+    // 準備匯出的資料，將英文狀態轉換為中文
+    const exportData = students.map(student => ({
+      '姓名': student.name,
+      '年級': student.grade || '',
+      '班級': student.class_name || '',
+      '身分': student.is_officer ? '幹部' : '一般球員',
+      '狀態': student.is_active === false ? '離隊/畢業' : '在隊',
+      '備註': student.note || ''
+    }));
+
+    // 建立 Worksheet 與 Workbook
+    const worksheet = XLSX.utils.json_to_sheet(exportData);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, '球員名冊');
+
+    // 產生檔案並下載
+    const dateStr = new Date().toISOString().split('T')[0];
+    XLSX.writeFile(workbook, `球員名冊_${dateStr}.xlsx`);
   };
 
   return (
@@ -180,6 +229,21 @@ const StudentList = ({ teamId }) => {
             }}
           >
             {showInactive ? '隱藏離隊球員' : '顯示歷史球員'}
+          </button>
+          <button 
+            onClick={handleExportExcel}
+            disabled={students.length === 0}
+            style={{ 
+              background: '#217346', // Excel 的代表色
+              color: '#fff', 
+              border: 'none', 
+              padding: '8px 16px', 
+              borderRadius: '8px', 
+              cursor: students.length === 0 ? 'not-allowed' : 'pointer',
+              fontWeight: 'bold'
+            }}
+          >
+            📊 匯出 Excel
           </button>
           <button className="btn-primary" onClick={() => setShowAddForm(!showAddForm)}>
             {showAddForm ? '取消新增' : '+ 新增球員'}
