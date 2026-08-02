@@ -3,6 +3,7 @@ import { useAuth } from '../contexts/AuthContext';
 import TeamManagement from '../components/TeamManagement';
 import StudentList from '../components/StudentList';
 import BillingDashboard from '../components/BillingDashboard';
+import TeamSettings from '../components/TeamSettings';
 
 const Dashboard = () => {
   const { user, isSuperAdmin, userRoles } = useAuth();
@@ -113,6 +114,20 @@ const Dashboard = () => {
                 >
                   💰 帳務收費
                 </button>
+                <button 
+                  onClick={() => handleSubTabChange(role.team_id, 'settings')}
+                  style={{
+                    padding: '8px 16px',
+                    background: currentSubTab === 'settings' ? 'var(--primary-color)' : 'transparent',
+                    color: currentSubTab === 'settings' ? '#fff' : '#aaa',
+                    border: 'none',
+                    borderRadius: '6px',
+                    cursor: 'pointer',
+                    fontWeight: 'bold'
+                  }}
+                >
+                  ⚙️ 球隊權限
+                </button>
               </div>
 
               {/* 子頁面內容切換 */}
@@ -122,6 +137,10 @@ const Dashboard = () => {
 
               {currentSubTab === 'billing' && (
                 <BillingDashboard teamId={role.team_id} />
+              )}
+
+              {currentSubTab === 'settings' && (
+                <TeamSettings teamId={role.team_id} />
               )}
             </div>
           );
