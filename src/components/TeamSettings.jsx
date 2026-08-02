@@ -3,6 +3,8 @@ import { supabase } from '../config/supabaseClient';
 
 const TeamSettings = ({ teamId }) => {
   const [selectedEmail, setSelectedEmail] = useState('');
+  const [suggestions, setSuggestions] = useState([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
   const [currentAdmins, setCurrentAdmins] = useState([]);
   const [loadingAdmins, setLoadingAdmins] = useState(false);
   const [invites, setInvites] = useState([]);
@@ -19,6 +21,22 @@ const TeamSettings = ({ teamId }) => {
       console.error('Failed to fetch admins:', adminsError);
     }
     setLoadingAdmins(false);
+  };
+
+  const handleEmailChange = async (e) => {
+    const val = e.target.value;
+    setSelectedEmail(val);
+    
+    if (val.length >= 3) {
+      const { data, error } = await supabase.rpc('search_users_by_email', { keyword: val });
+      if (!error && data) {
+        setSuggestions(data.map(d => d.email));
+        setShowSuggestions(true);
+      }
+    } else {
+      setSuggestions([]);
+      setShowSuggestions(false);
+    }
   };
 
 
@@ -54,6 +72,8 @@ const TeamSettings = ({ teamId }) => {
       alert('指派成功！');
       fetchAdmins();
       setSelectedEmail('');
+      setSuggestions([]);
+      setShowSuggestions(false);
     }
   };
 
@@ -134,15 +154,36 @@ const TeamSettings = ({ teamId }) => {
             如果您知道對方「已登入過本系統」的 Google 信箱，可以直接輸入信箱將其設為共同管理員。
           </p>
           
-          <form onSubmit={handleAssignAdmin} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          <form onSubmit={handleAssignAdmin} style={{ display: 'flex', flexDirection: 'column', gap: '12px', position: 'relative' }}>
             <input 
               type="email" 
               required
               placeholder="例如: coach@gmail.com" 
               value={selectedEmail}
-              onChange={(e) => setSelectedEmail(e.target.value)}
+              onChange={handleEmailChange}
+              onFocus={() => { if (suggestions.length > 0) setShowSuggestions(true); }}
+              onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
               style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid var(--glass-border)', background: 'rgba(255,255,255,0.1)', color: 'white' }}
             />
+            
+            {showSuggestions && suggestions.length > 0 && (
+              <div style={{ position: 'absolute', top: '55px', left: 0, right: 0, background: 'rgba(30,30,40,0.95)', border: '1px solid var(--glass-border)', borderRadius: '8px', zIndex: 10, maxHeight: '150px', overflowY: 'auto' }}>
+                {suggestions.map((email, idx) => (
+                  <div 
+                    key={idx} 
+                    onClick={() => {
+                      setSelectedEmail(email);
+                      setShowSuggestions(false);
+                    }}
+                    style={{ padding: '10px 12px', cursor: 'pointer', borderBottom: idx < suggestions.length - 1 ? '1px solid rgba(255,255,255,0.05)' : 'none' }}
+                    onMouseEnter={e => e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.1)'}
+                    onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
+                  >
+                    {email}
+                  </div>
+                ))}
+              </div>
+            )}
             
             <button 
               type="submit" 
