@@ -1,13 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../config/supabaseClient';
 import BillingDetail from './BillingDetail';
+import TeamLedger from './TeamLedger';
 
 const BillingDashboard = ({ teamId }) => {
   const [cycles, setCycles] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showCreateForm, setShowCreateForm] = useState(false);
-  const [newCycle, setNewCycle] = useState({ name: '', default_amount: 1000 });
+  const [newCycle, setNewCycle] = useState({ name: '', default_amount: 1000, billing_month: new Date().toISOString().slice(0, 7) });
   const [selectedCycleId, setSelectedCycleId] = useState(null);
+  const [activeTab, setActiveTab] = useState('tuition');
 
   useEffect(() => {
     fetchCycles();
@@ -44,7 +46,8 @@ const BillingDashboard = ({ teamId }) => {
       .insert([{ 
         team_id: teamId, 
         name: newCycle.name, 
-        default_amount: newCycle.default_amount 
+        default_amount: newCycle.default_amount,
+        billing_month: newCycle.billing_month
       }])
       .select();
 
@@ -86,7 +89,7 @@ const BillingDashboard = ({ teamId }) => {
 
     alert('✅ 帳單建立成功！已自動發布給所有在隊球員。');
     setShowCreateForm(false);
-    setNewCycle({ name: '', default_amount: 1000 });
+    setNewCycle({ name: '', default_amount: 1000, billing_month: new Date().toISOString().slice(0, 7) });
     fetchCycles();
   };
 
@@ -105,21 +108,60 @@ const BillingDashboard = ({ teamId }) => {
 
   return (
     <div style={{ marginTop: '20px' }}>
-      <div className="flex-mobile-column" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', gap: '15px' }}>
-        <h2 style={{ margin: 0, color: 'var(--primary-color)' }}>歷史帳單總覽</h2>
+      
+      {/* 切換頁籤 */}
+      <div style={{ display: 'flex', gap: '10px', marginBottom: '20px', borderBottom: '1px solid var(--border)' }}>
         <button 
-          className="btn-primary" 
-          onClick={() => setShowCreateForm(!showCreateForm)}
-          style={{ background: showCreateForm ? 'transparent' : 'var(--primary-color)', border: showCreateForm ? '1px solid #ccc' : 'none' }}
+          onClick={() => setActiveTab('tuition')}
+          style={{ 
+            background: 'none', border: 'none', color: activeTab === 'tuition' ? 'var(--primary-color)' : '#aaa', 
+            padding: '10px 20px', fontSize: '1.1rem', fontWeight: 'bold', cursor: 'pointer',
+            borderBottom: activeTab === 'tuition' ? '3px solid var(--primary-color)' : '3px solid transparent'
+          }}
         >
-          {showCreateForm ? '取消' : '💰 產生本月新帳單'}
+          💰 學費帳單
+        </button>
+        <button 
+          onClick={() => setActiveTab('ledger')}
+          style={{ 
+            background: 'none', border: 'none', color: activeTab === 'ledger' ? '#fbbc05' : '#aaa', 
+            padding: '10px 20px', fontSize: '1.1rem', fontWeight: 'bold', cursor: 'pointer',
+            borderBottom: activeTab === 'ledger' ? '3px solid #fbbc05' : '3px solid transparent'
+          }}
+        >
+          📓 雜支收支簿
         </button>
       </div>
 
-      {showCreateForm && (
+      {activeTab === 'ledger' ? (
+        <TeamLedger teamId={teamId} />
+      ) : (
+        <>
+          <div className="flex-mobile-column" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', gap: '15px' }}>
+            <h2 style={{ margin: 0, color: 'var(--primary-color)' }}>歷史帳單總覽</h2>
+            <button 
+              className="btn-primary" 
+              onClick={() => setShowCreateForm(!showCreateForm)}
+              style={{ background: showCreateForm ? 'transparent' : 'var(--primary-color)', border: showCreateForm ? '1px solid #ccc' : 'none', width: 'auto' }}
+            >
+              {showCreateForm ? '取消' : '+ 產生新帳單'}
+            </button>
+          </div>
+
+          {showCreateForm && (
         <div style={{ background: 'rgba(0,0,0,0.2)', padding: '20px', borderRadius: '12px', marginBottom: '20px', border: '1px solid var(--glass-border)' }}>
           <h3 style={{ marginTop: 0 }}>新增收費項目</h3>
           <form className="flex-mobile-column" onSubmit={handleCreateCycle} style={{ display: 'flex', gap: '15px', alignItems: 'flex-end', flexWrap: 'wrap' }}>
+            <div style={{ flex: 1, minWidth: '150px' }}>
+              <label style={{ display: 'block', marginBottom: '5px', fontSize: '0.9rem' }}>所屬月份</label>
+              <input 
+                type="month" 
+                required
+                value={newCycle.billing_month} 
+                onChange={e => setNewCycle({...newCycle, billing_month: e.target.value})}
+                style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid var(--glass-border)', background: 'rgba(255,255,255,0.1)', color: 'white' }}
+              />
+            </div>
             <div style={{ flex: 2, minWidth: '200px' }}>
               <label style={{ display: 'block', marginBottom: '5px', fontSize: '0.9rem' }}>帳單名稱 (例如: 2026年8月月費)</label>
               <input 
@@ -176,7 +218,10 @@ const BillingDashboard = ({ teamId }) => {
               onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.background = 'rgba(255,255,255,0.05)'; }}
             >
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '15px' }}>
-                <h3 style={{ margin: 0, fontSize: '1.2rem' }}>{cycle.name}</h3>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: '1.2rem', marginBottom: '4px' }}>{cycle.name}</h3>
+                  {cycle.billing_month && <div style={{ fontSize: '0.85rem', color: '#fbbc05' }}>月份: {cycle.billing_month}</div>}
+                </div>
                 {cycle.status === 'active' ? (
                   <span style={{ background: 'rgba(74, 222, 128, 0.2)', color: '#4ade80', padding: '4px 8px', borderRadius: '4px', fontSize: '0.8rem' }}>收費中</span>
                 ) : (
@@ -192,6 +237,8 @@ const BillingDashboard = ({ teamId }) => {
             </div>
           ))}
         </div>
+      )}
+        </>
       )}
     </div>
   );

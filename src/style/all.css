@@ -165,4 +165,54 @@ body {
   .app-main {
     padding: 10px !important;
   }
+
+  /* 優化操作按鈕容器 (讓按鈕整齊排列) */
+  .action-buttons-container {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    gap: 12px !important;
+  }
+  .action-buttons-container > button {
+    width: 100%;
+    margin: 0 !important;
+    padding: 12px !important;
+  }
+
+  /* Mobile Card Table 樣式 (將傳統表格轉為卡片式) */
+  table.mobile-card-table {
+    border: 0;
+  }
+  table.mobile-card-table thead {
+    display: none; /* 隱藏表頭 */
+  }
+  table.mobile-card-table tr {
+    display: block;
+    margin-bottom: 16px;
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+    border-radius: 12px;
+    background: rgba(0, 0, 0, 0.2);
+    padding: 8px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  }
+  table.mobile-card-table td {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    padding: 10px 8px !important;
+    text-align: right;
+  }
+  table.mobile-card-table td:last-child {
+    border-bottom: 0;
+  }
+  /* 注入標籤名稱 */
+  table.mobile-card-table td::before {
+    content: attr(data-label);
+    font-weight: bold;
+    color: var(--text-secondary);
+    margin-right: 15px;
+    text-align: left;
+    flex-shrink: 0;
+  }
 }

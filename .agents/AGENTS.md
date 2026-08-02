@@ -14,6 +14,7 @@ These rules must be strictly followed by all AI agents operating within this wor
    - Dark mode by default
    - Glassmorphism effects (using the existing `.glass-panel` CSS classes)
    - Vibrant accent colors and smooth micro-animations.
+3. **Mobile-First Data Display**: Avoid using traditional HTML `<table>` elements for displaying lists of data, as they are not mobile-friendly. Always prefer a "Card View" (卡片式) design or use CSS to transform tables into cards for smaller screens, ensuring a seamless experience on mobile devices without horizontal scrolling.
 
 ## Domain Context
 - This system is a multi-tenant SaaS application designed specifically for table tennis teams. Any new feature should be designed with this multi-tenant context in mind.

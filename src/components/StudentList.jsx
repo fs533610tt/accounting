@@ -200,7 +200,7 @@ const StudentList = ({ teamId }) => {
     <div style={{ marginTop: '30px' }}>
       <div className="flex-mobile-column" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', gap: '15px' }}>
         <h2 style={{ margin: 0 }}>球員名冊管理</h2>
-        <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', justifyContent: 'center' }}>
+        <div className="action-buttons-container" style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', justifyContent: 'center' }}>
           <button 
             onClick={handleBulkPromote}
             disabled={students.length === 0}
@@ -328,7 +328,7 @@ const StudentList = ({ teamId }) => {
         </div>
       ) : (
         <div className="table-responsive">
-          <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', minWidth: '600px' }}>
+          <table className="mobile-card-table" style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', minWidth: '600px' }}>
             <thead>
               <tr style={{ borderBottom: '2px solid rgba(255,255,255,0.1)' }}>
                 <th style={{ padding: '12px' }}>姓名</th>
@@ -350,26 +350,26 @@ const StudentList = ({ teamId }) => {
                   {editingId === student.id ? (
                     // 編輯模式
                     <>
-                      <td style={{ padding: '12px' }}>
+                      <td data-label="姓名" style={{ padding: '12px' }}>
                         <input type="text" value={editForm.name} onChange={e => setEditForm({...editForm, name: e.target.value})} style={{ width: '80px', padding: '4px' }} />
                       </td>
-                      <td style={{ padding: '12px' }}>
+                      <td data-label="年級/班級" style={{ padding: '12px' }}>
                         <input type="text" value={editForm.grade || ''} placeholder="年" onChange={e => setEditForm({...editForm, grade: e.target.value})} style={{ width: '40px', padding: '4px', marginRight: '4px' }} />
                         <input type="text" value={editForm.class_name || ''} placeholder="班" onChange={e => setEditForm({...editForm, class_name: e.target.value})} style={{ width: '40px', padding: '4px' }} />
                       </td>
-                      <td style={{ padding: '12px' }}>
+                      <td data-label="備註" style={{ padding: '12px' }}>
                         <input type="text" value={editForm.note || ''} onChange={e => setEditForm({...editForm, note: e.target.value})} style={{ width: '80px', padding: '4px' }} />
                       </td>
-                      <td style={{ padding: '12px' }}>
+                      <td data-label="身分" style={{ padding: '12px' }}>
                         <input type="checkbox" checked={editForm.is_officer} onChange={e => setEditForm({...editForm, is_officer: e.target.checked})} />
                       </td>
-                      <td style={{ padding: '12px' }}>
+                      <td data-label="狀態" style={{ padding: '12px' }}>
                         <label style={{ fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '4px' }}>
                           <input type="checkbox" checked={editForm.is_active !== false} onChange={e => setEditForm({...editForm, is_active: e.target.checked})} />
                           在隊
                         </label>
                       </td>
-                      <td style={{ padding: '12px' }}>
+                      <td data-label="操作" style={{ padding: '12px' }}>
                         <button onClick={() => handleSaveEdit(student.id)} style={{ background: 'var(--primary-color)', color: 'white', border: 'none', padding: '4px 8px', borderRadius: '4px', cursor: 'pointer', marginRight: '8px' }}>儲存</button>
                         <button onClick={handleCancelEdit} style={{ background: 'transparent', border: '1px solid #ccc', color: '#ccc', padding: '4px 8px', borderRadius: '4px', cursor: 'pointer' }}>取消</button>
                       </td>
@@ -377,28 +377,28 @@ const StudentList = ({ teamId }) => {
                   ) : (
                     // 瀏覽模式
                     <>
-                      <td style={{ padding: '12px' }}><strong>{student.name}</strong></td>
-                      <td style={{ padding: '12px', color: '#ccc' }}>
+                      <td data-label="姓名" style={{ padding: '12px' }}><strong>{student.name}</strong></td>
+                      <td data-label="年級/班級" style={{ padding: '12px', color: '#ccc' }}>
                         {student.grade ? `${student.grade}年` : ''}{student.class_name ? `${student.class_name}班` : '-'}
                       </td>
-                      <td style={{ padding: '12px', color: '#aaa', fontSize: '0.9rem' }}>
+                      <td data-label="備註" style={{ padding: '12px', color: '#aaa', fontSize: '0.9rem' }}>
                         {student.note || '-'}
                       </td>
-                      <td style={{ padding: '12px' }}>
+                      <td data-label="身分" style={{ padding: '12px' }}>
                         {student.is_officer ? (
                           <span style={{ background: 'rgba(251, 188, 5, 0.2)', color: '#fbbc05', padding: '4px 8px', borderRadius: '4px', fontSize: '0.8rem' }}>幹部</span>
                         ) : (
                           <span style={{ color: '#888' }}>一般球員</span>
                         )}
                       </td>
-                      <td style={{ padding: '12px' }}>
+                      <td data-label="狀態" style={{ padding: '12px' }}>
                         {student.is_active === false ? (
                            <span style={{ color: '#ff6b6b', fontSize: '0.9rem' }}>離隊/畢業</span>
                         ) : (
                            <span style={{ color: '#4ade80', fontSize: '0.9rem' }}>在隊</span>
                         )}
                       </td>
-                      <td style={{ padding: '12px' }}>
+                      <td data-label="操作" style={{ padding: '12px' }}>
                         <button 
                           onClick={() => handleEditClick(student)}
                           style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.3)', color: '#fff', padding: '4px 12px', borderRadius: '4px', cursor: 'pointer', marginRight: '8px' }}
