@@ -105,7 +105,7 @@ const BillingDashboard = ({ teamId }) => {
 
   return (
     <div style={{ marginTop: '20px' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+      <div className="flex-mobile-column" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', gap: '15px' }}>
         <h2 style={{ margin: 0, color: 'var(--primary-color)' }}>歷史帳單總覽</h2>
         <button 
           className="btn-primary" 

@@ -85,6 +85,7 @@ npm run deploy
 如果您是未來的接手開發者，或是想將這套系統獨立部署給其他國小使用，請務必閱讀本專案內建的指南：
 - [未來擴充與部署指南 (Expansion Guide)](./docs/expansion_guide.md)
 - [開發鐵律與風格設定 (AI Agents Rules)](./.agents/AGENTS.md)
+- [🔐 Google OAuth 與 Supabase 登入設定教學](./docs/google_oauth_setup.md)
 
 ---
 *Developed with passion for Table Tennis Teams.* 🏓

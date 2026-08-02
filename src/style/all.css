@@ -140,4 +140,9 @@ body {
     padding: 14px 20px;
     font-size: 1.1rem;
   }
+
+  /* 在手機版隱藏特定元素 */
+  .hide-on-mobile {
+    display: none !important;
+  }
 }

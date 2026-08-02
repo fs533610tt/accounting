@@ -23,10 +23,6 @@ const Dashboard = () => {
 
   return (
     <div style={{ padding: '20px', maxWidth: '1000px', margin: '0 auto' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-        <h2>歡迎回來，{user.email}</h2>
-      </div>
-
       {/* 頂部導覽列 (Tabs) */}
       <div style={{ display: 'flex', gap: '10px', borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '10px', overflowX: 'auto' }}>
         {isSuperAdmin && (

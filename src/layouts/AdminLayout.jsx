@@ -18,7 +18,7 @@ const AdminLayout = () => {
           {isSuperAdmin && <span style={{ fontSize: '0.8rem', backgroundColor: 'var(--primary-color)', padding: '2px 8px', borderRadius: '12px', marginTop: '4px', display: 'inline-block' }}>Super Admin</span>}
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-          <span>{user.email}</span>
+          <span className="hide-on-mobile">{user.email}</span>
           <button className="btn-primary" onClick={logout} style={{ padding: '8px 16px', width: 'auto' }}>登出</button>
         </div>
       </header>
