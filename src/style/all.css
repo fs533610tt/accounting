@@ -95,6 +95,16 @@ body {
   transform: translateY(0);
 }
 
+/* 預設導覽列與主畫面邊距 (電腦版) */
+.app-header {
+  padding: 16px 24px;
+  margin: 16px;
+  border-radius: 12px;
+}
+.app-main {
+  padding: 24px;
+}
+
 /* ==========================================================================
    Mobile Responsiveness (RWD) Utilities
    ========================================================================== */
@@ -144,5 +154,15 @@ body {
   /* 在手機版隱藏特定元素 */
   .hide-on-mobile {
     display: none !important;
+  }
+
+  /* 手機版導覽列與主畫面縮小邊距 */
+  .app-header {
+    margin: 8px !important;
+    padding: 10px 16px !important;
+    border-radius: 8px !important;
+  }
+  .app-main {
+    padding: 10px !important;
   }
 }

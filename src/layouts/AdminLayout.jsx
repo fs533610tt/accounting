@@ -12,19 +12,19 @@ const AdminLayout = () => {
   return (
     <div className="admin-layout" style={{ display: 'flex', minHeight: '100vh', flexDirection: 'column' }}>
       {/* 頂部導覽列 */}
-      <header className="glass-panel" style={{ padding: '16px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '16px', borderRadius: '12px' }}>
+      <header className="glass-panel app-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
           <h1 style={{ margin: 0, fontSize: '1.25rem' }}>作帳系統</h1>
           {isSuperAdmin && <span style={{ fontSize: '0.8rem', backgroundColor: 'var(--primary-color)', padding: '2px 8px', borderRadius: '12px', marginTop: '4px', display: 'inline-block' }}>Super Admin</span>}
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
           <span className="hide-on-mobile">{user.email}</span>
-          <button className="btn-primary" onClick={logout} style={{ padding: '8px 16px', width: 'auto' }}>登出</button>
+          <button className="btn-primary" onClick={logout} style={{ padding: '6px 16px', width: 'auto', fontSize: '0.9rem' }}>登出</button>
         </div>
       </header>
 
       {/* 主內容區塊 */}
-      <main style={{ padding: '24px', flex: 1 }}>
+      <main className="app-main" style={{ flex: 1 }}>
         <Outlet />
       </main>
 
