@@ -94,3 +94,50 @@ body {
 .btn-primary:active {
   transform: translateY(0);
 }
+
+/* ==========================================================================
+   Mobile Responsiveness (RWD) Utilities
+   ========================================================================== */
+
+/* 響應式表格容器：在手機上允許左右滑動 */
+.table-responsive {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch; /* iOS 滑順捲動 */
+  margin-bottom: 15px;
+}
+
+/* 針對小螢幕的手機版調整 */
+@media (max-width: 768px) {
+  /* 縮小玻璃面板的留白，爭取更多螢幕空間 */
+  .glass-panel {
+    padding: 16px !important;
+    border-radius: 12px;
+  }
+
+  /* 讓表單在手機上自動折行並佔滿寬度 */
+  .flex-mobile-column {
+    flex-direction: column !important;
+    align-items: stretch !important;
+  }
+
+  /* 讓內部元素的寬度在手機上解鎖，預設佔滿 */
+  .flex-mobile-column > div {
+    width: 100% !important;
+    min-width: 100% !important;
+  }
+
+  /* 調整標題大小 */
+  h2 {
+    font-size: 1.25rem;
+  }
+  h3 {
+    font-size: 1.1rem;
+  }
+
+  /* 優化按鈕在手機上的點擊範圍 */
+  .btn-primary {
+    padding: 14px 20px;
+    font-size: 1.1rem;
+  }
+}

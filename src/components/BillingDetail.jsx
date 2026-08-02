@@ -133,7 +133,7 @@ const BillingDetail = ({ cycleId, onBack }) => {
         </div>
       </div>
 
-      <div style={{ overflowX: 'auto' }}>
+      <div className="table-responsive">
         <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', minWidth: '800px' }}>
           <thead>
             <tr style={{ borderBottom: '2px solid rgba(255,255,255,0.1)' }}>

@@ -188,11 +188,11 @@ const StudentList = ({ teamId }) => {
       </div>
 
       {showAddForm && (
-        <div className="glass-panel" style={{ padding: '20px', marginBottom: '20px' }}>
-          <h3 style={{ marginTop: 0 }}>新增球員資料</h3>
-          <form onSubmit={handleAddStudent} style={{ display: 'flex', gap: '15px', flexWrap: 'wrap', alignItems: 'flex-end' }}>
-            <div style={{ flex: 1, minWidth: '150px' }}>
-              <label style={{ display: 'block', marginBottom: '5px', fontSize: '0.9rem' }}>姓名 (必填)</label>
+        <div style={{ background: 'rgba(0,0,0,0.2)', padding: '20px', borderRadius: '12px', marginBottom: '20px', border: '1px solid var(--glass-border)' }}>
+          <h3 style={{ marginTop: 0 }}>新增球員</h3>
+          <form className="flex-mobile-column" onSubmit={handleAddStudent} style={{ display: 'flex', gap: '10px', alignItems: 'flex-end', flexWrap: 'wrap' }}>
+            <div style={{ flex: 1, minWidth: '120px' }}>
+              <label style={{ display: 'block', marginBottom: '5px', fontSize: '0.9rem' }}>姓名</label>
               <input 
                 type="text" 
                 required
@@ -263,8 +263,8 @@ const StudentList = ({ teamId }) => {
           目前還沒有任何球員資料，點擊上方按鈕新增第一位球員吧！
         </div>
       ) : (
-        <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+        <div className="table-responsive">
+          <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', minWidth: '600px' }}>
             <thead>
               <tr style={{ borderBottom: '2px solid rgba(255,255,255,0.1)' }}>
                 <th style={{ padding: '12px' }}>姓名</th>

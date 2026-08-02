@@ -119,7 +119,7 @@ const BillingDashboard = ({ teamId }) => {
       {showCreateForm && (
         <div style={{ background: 'rgba(0,0,0,0.2)', padding: '20px', borderRadius: '12px', marginBottom: '20px', border: '1px solid var(--glass-border)' }}>
           <h3 style={{ marginTop: 0 }}>新增收費項目</h3>
-          <form onSubmit={handleCreateCycle} style={{ display: 'flex', gap: '15px', alignItems: 'flex-end', flexWrap: 'wrap' }}>
+          <form className="flex-mobile-column" onSubmit={handleCreateCycle} style={{ display: 'flex', gap: '15px', alignItems: 'flex-end', flexWrap: 'wrap' }}>
             <div style={{ flex: 2, minWidth: '200px' }}>
               <label style={{ display: 'block', marginBottom: '5px', fontSize: '0.9rem' }}>帳單名稱 (例如: 2026年8月月費)</label>
               <input 
