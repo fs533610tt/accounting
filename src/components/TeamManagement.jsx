@@ -9,10 +9,7 @@ const TeamManagement = () => {
   // Modal states
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedTeam, setSelectedTeam] = useState(null);
-  const [users, setUsers] = useState([]);
   const [selectedEmail, setSelectedEmail] = useState('');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [loadingUsers, setLoadingUsers] = useState(false);
   const [currentAdmins, setCurrentAdmins] = useState([]);
   const [loadingAdmins, setLoadingAdmins] = useState(false);
 
@@ -52,17 +49,8 @@ const TeamManagement = () => {
   const openAdminModal = async (team) => {
     setSelectedTeam(team);
     setIsModalOpen(true);
-    setLoadingUsers(true);
     setLoadingAdmins(true);
-    setSearchQuery('');
     setSelectedEmail('');
-    
-    // 呼叫我們即將在 Supabase 建立的 get_all_users 函數
-    const { data: usersData, error: usersError } = await supabase.rpc('get_all_users');
-    if (!usersError && usersData) {
-      setUsers(usersData);
-    }
-    setLoadingUsers(false);
 
     // 取得目前這支球隊的管理員
     const { data: adminsData, error: adminsError } = await supabase.rpc('get_team_admins', {
@@ -94,7 +82,6 @@ const TeamManagement = () => {
       setLoadingAdmins(false);
       
       setSelectedEmail('');
-      setSearchQuery('');
     }
   };
 
@@ -134,41 +121,46 @@ const TeamManagement = () => {
       ) : teams.length === 0 ? (
         <p style={{ color: 'var(--text-secondary)' }}>目前還沒有任何球隊</p>
       ) : (
-        <div className="table-responsive">
-          <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: '16px', minWidth: '400px' }}>
-            <thead>
-              <tr style={{ borderBottom: '1px solid var(--glass-border)', textAlign: 'left' }}>
-                <th style={{ padding: '12px' }}>球隊名稱</th>
-                <th style={{ padding: '12px' }}>狀態</th>
-                <th style={{ padding: '12px' }}>操作</th>
-              </tr>
-            </thead>
-            <tbody>
-              {teams.map(team => (
-              <tr key={team.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-                <td style={{ padding: '12px' }}>{team.name}</td>
-                <td style={{ padding: '12px' }}>
-                  <span style={{ 
-                    padding: '4px 8px', borderRadius: '12px', fontSize: '0.8rem',
-                    backgroundColor: team.status === 'active' ? 'rgba(46, 204, 113, 0.2)' : 'rgba(241, 196, 15, 0.2)',
-                    color: team.status === 'active' ? '#2ecc71' : '#f1c40f'
-                  }}>
-                    {team.status}
-                  </span>
-                </td>
-                <td style={{ padding: '12px' }}>
-                  <button 
-                    className="btn-secondary" 
-                    onClick={() => openAdminModal(team)}
-                    style={{ padding: '6px 12px', fontSize: '0.8rem', cursor: 'pointer' }}
-                  >
-                    指派管理員
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '20px', marginTop: '16px' }}>
+          {teams.map(team => (
+            <div 
+              key={team.id} 
+              style={{ 
+                background: 'rgba(255,255,255,0.03)', 
+                borderRadius: '12px', 
+                border: '1px solid rgba(255,255,255,0.08)', 
+                padding: '20px', 
+                display: 'flex', 
+                flexDirection: 'column', 
+                gap: '15px',
+                transition: 'transform 0.2s',
+              }}
+              onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-2px)'}
+              onMouseLeave={e => e.currentTarget.style.transform = 'translateY(0)'}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                <h4 style={{ margin: 0, fontSize: '1.2rem', color: 'white' }}>{team.name}</h4>
+                <span style={{ 
+                  padding: '4px 10px', borderRadius: '6px', fontSize: '0.8rem', fontWeight: 'bold',
+                  backgroundColor: team.status === 'active' ? 'rgba(46, 204, 113, 0.1)' : 'rgba(241, 196, 15, 0.1)',
+                  border: `1px solid ${team.status === 'active' ? 'rgba(46, 204, 113, 0.3)' : 'rgba(241, 196, 15, 0.3)'}`,
+                  color: team.status === 'active' ? '#4ade80' : '#f1c40f'
+                }}>
+                  {team.status === 'active' ? '使用中' : team.status}
+                </span>
+              </div>
+              
+              <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 'auto', paddingTop: '15px', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+                <button 
+                  className="btn-secondary" 
+                  onClick={() => openAdminModal(team)}
+                  style={{ padding: '8px 16px', fontSize: '0.9rem', cursor: 'pointer', borderRadius: '6px', width: '100%', border: '1px solid rgba(255,255,255,0.2)' }}
+                >
+                  ⚙️ 指派管理員
+                </button>
+              </div>
+            </div>
+          ))}
         </div>
       )}
 
@@ -207,44 +199,18 @@ const TeamManagement = () => {
             </div>
 
             {/* 新增管理員區塊 */}
-            <h4 style={{ margin: '0 0 10px 0', color: 'var(--primary-color)' }}>新增管理員</h4>
-            <p style={{ fontSize: '0.9rem', color: '#ccc', margin: '0 0 10px 0' }}>搜尋並選擇一位已登入過的系統使用者：</p>
+            <h4 style={{ margin: '0 0 10px 0', color: 'var(--primary-color)' }}>直接加入管理員</h4>
+            <p style={{ fontSize: '0.9rem', color: '#ccc', margin: '0 0 10px 0' }}>如果您知道對方「已登入過本系統」的 Google 信箱，可以直接輸入：</p>
             
-            {loadingUsers ? (
-              <p>載入使用者名單中...</p>
-            ) : (
-              <div style={{ marginBottom: '20px' }}>
-                <input 
-                  type="text" 
-                  placeholder="輸入信箱關鍵字搜尋 (例如: ma)..." 
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid var(--glass-border)', background: 'rgba(255,255,255,0.1)', color: 'white', marginBottom: '8px' }}
-                />
-                
-                <div style={{ maxHeight: '150px', overflowY: 'auto', border: '1px solid var(--glass-border)', borderRadius: '8px', background: 'rgba(0,0,0,0.3)' }}>
-                  {users
-                    .filter(u => u.email.toLowerCase().includes(searchQuery.toLowerCase()))
-                    .map(u => (
-                    <div 
-                      key={u.id} 
-                      onClick={() => setSelectedEmail(u.email)}
-                      style={{ 
-                        padding: '10px', 
-                        cursor: 'pointer', 
-                        borderBottom: '1px solid rgba(255,255,255,0.05)',
-                        backgroundColor: selectedEmail === u.email ? 'var(--primary-color)' : 'transparent'
-                      }}
-                    >
-                      {u.email}
-                    </div>
-                  ))}
-                  {users.filter(u => u.email.toLowerCase().includes(searchQuery.toLowerCase())).length === 0 && (
-                    <div style={{ padding: '10px', color: '#888' }}>找不到符合的信箱</div>
-                  )}
-                </div>
-              </div>
-            )}
+            <div style={{ marginBottom: '20px' }}>
+              <input 
+                type="email" 
+                placeholder="例如: coach@gmail.com" 
+                value={selectedEmail}
+                onChange={(e) => setSelectedEmail(e.target.value)}
+                style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid var(--glass-border)', background: 'rgba(255,255,255,0.1)', color: 'white', marginBottom: '8px' }}
+              />
+            </div>
 
             <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end', marginTop: '20px' }}>
               <button className="btn-secondary" onClick={() => setIsModalOpen(false)} style={{ padding: '8px 16px', cursor: 'pointer' }}>關閉視窗</button>

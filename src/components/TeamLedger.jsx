@@ -164,41 +164,62 @@ const TeamLedger = ({ teamId }) => {
           <p style={{ color: '#aaa', marginBottom: '10px' }}>目前還沒有任何雜支紀錄。</p>
         </div>
       ) : (
-        <div className="table-responsive">
-          <table className="mobile-card-table" style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', minWidth: '600px' }}>
-            <thead>
-              <tr style={{ borderBottom: '2px solid rgba(255,255,255,0.1)' }}>
-                <th style={{ padding: '12px' }}>日期</th>
-                <th style={{ padding: '12px' }}>類型</th>
-                <th style={{ padding: '12px' }}>分類</th>
-                <th style={{ padding: '12px' }}>金額</th>
-                <th style={{ padding: '12px' }}>備註</th>
-                <th style={{ padding: '12px' }}>操作</th>
-              </tr>
-            </thead>
-            <tbody>
-              {transactions.map(tx => (
-                <tr key={tx.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-                  <td data-label="日期" style={{ padding: '12px', color: '#ccc' }}>{tx.transaction_date}</td>
-                  <td data-label="類型" style={{ padding: '12px' }}>
-                    {tx.type === 'income' ? (
-                      <span style={{ background: 'rgba(74, 222, 128, 0.2)', color: '#4ade80', padding: '4px 8px', borderRadius: '4px', fontSize: '0.8rem' }}>收入</span>
-                    ) : (
-                      <span style={{ background: 'rgba(255, 107, 107, 0.2)', color: '#ff6b6b', padding: '4px 8px', borderRadius: '4px', fontSize: '0.8rem' }}>支出</span>
-                    )}
-                  </td>
-                  <td data-label="分類" style={{ padding: '12px' }}>{tx.category}</td>
-                  <td data-label="金額" style={{ padding: '12px', fontWeight: 'bold', color: tx.type === 'income' ? '#4ade80' : '#ff6b6b' }}>
-                    {tx.type === 'income' ? '+' : '-'}${tx.amount}
-                  </td>
-                  <td data-label="備註" style={{ padding: '12px', color: '#aaa', fontSize: '0.9rem' }}>{tx.description || '-'}</td>
-                  <td data-label="操作" style={{ padding: '12px' }}>
-                    <button onClick={() => handleDelete(tx.id)} style={{ background: 'transparent', border: 'none', color: '#ff6b6b', cursor: 'pointer', fontSize: '1.2rem' }}>🗑️</button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '15px' }}>
+          {transactions.map(tx => (
+            <div 
+              key={tx.id} 
+              style={{ 
+                background: 'rgba(255,255,255,0.03)', 
+                borderRadius: '12px', 
+                border: '1px solid rgba(255,255,255,0.08)', 
+                padding: '20px', 
+                display: 'flex', 
+                flexDirection: 'column', 
+                gap: '12px',
+                transition: 'transform 0.2s',
+              }}
+              onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-2px)'}
+              onMouseLeave={e => e.currentTarget.style.transform = 'translateY(0)'}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: '10px' }}>
+                <span style={{ color: '#aaa', fontSize: '0.9rem' }}>{tx.transaction_date}</span>
+                {tx.type === 'income' ? (
+                  <span style={{ background: 'rgba(74, 222, 128, 0.1)', border: '1px solid rgba(74, 222, 128, 0.3)', color: '#4ade80', padding: '4px 10px', borderRadius: '6px', fontSize: '0.8rem', fontWeight: 'bold' }}>收入</span>
+                ) : (
+                  <span style={{ background: 'rgba(255, 107, 107, 0.1)', border: '1px solid rgba(255, 107, 107, 0.3)', color: '#ff6b6b', padding: '4px 10px', borderRadius: '6px', fontSize: '0.8rem', fontWeight: 'bold' }}>支出</span>
+                )}
+              </div>
+              
+              <div>
+                <div style={{ fontSize: '0.85rem', color: '#888', marginBottom: '4px' }}>分類</div>
+                <div style={{ fontSize: '1.1rem', color: 'white' }}>{tx.category}</div>
+              </div>
+
+              <div>
+                <div style={{ fontSize: '0.85rem', color: '#888', marginBottom: '4px' }}>金額</div>
+                <div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: tx.type === 'income' ? '#4ade80' : '#ff6b6b' }}>
+                  {tx.type === 'income' ? '+' : '-'}${tx.amount}
+                </div>
+              </div>
+
+              {tx.description && (
+                <div style={{ background: 'rgba(0,0,0,0.2)', padding: '10px', borderRadius: '8px', fontSize: '0.9rem', color: '#ccc' }}>
+                  {tx.description}
+                </div>
+              )}
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 'auto', paddingTop: '10px' }}>
+                <button 
+                  onClick={() => handleDelete(tx.id)} 
+                  style={{ background: 'transparent', border: '1px solid rgba(255,100,100,0.2)', color: '#ff8888', padding: '6px 16px', borderRadius: '6px', cursor: 'pointer', fontSize: '0.85rem', transition: 'background 0.2s' }}
+                  onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,100,100,0.1)'}
+                  onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                >
+                  🗑️ 刪除紀錄
+                </button>
+              </div>
+            </div>
+          ))}
         </div>
       )}
     </div>

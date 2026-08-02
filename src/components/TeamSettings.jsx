@@ -2,10 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { supabase } from '../config/supabaseClient';
 
 const TeamSettings = ({ teamId }) => {
-  const [users, setUsers] = useState([]);
   const [selectedEmail, setSelectedEmail] = useState('');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [loadingUsers, setLoadingUsers] = useState(false);
   const [currentAdmins, setCurrentAdmins] = useState([]);
   const [loadingAdmins, setLoadingAdmins] = useState(false);
   const [invites, setInvites] = useState([]);
@@ -24,14 +21,7 @@ const TeamSettings = ({ teamId }) => {
     setLoadingAdmins(false);
   };
 
-  const fetchUsers = async () => {
-    setLoadingUsers(true);
-    const { data: usersData, error: usersError } = await supabase.rpc('get_all_users');
-    if (!usersError && usersData) {
-      setUsers(usersData);
-    }
-    setLoadingUsers(false);
-  };
+
 
   const fetchInvites = async () => {
     setLoadingInvites(true);
@@ -45,7 +35,6 @@ const TeamSettings = ({ teamId }) => {
   useEffect(() => {
     if (teamId) {
       fetchAdmins();
-      fetchUsers();
       fetchInvites();
     }
   }, [teamId]);
@@ -65,7 +54,6 @@ const TeamSettings = ({ teamId }) => {
       alert('指派成功！');
       fetchAdmins();
       setSelectedEmail('');
-      setSearchQuery('');
     }
   };
 
@@ -141,56 +129,30 @@ const TeamSettings = ({ teamId }) => {
 
         {/* 新增管理員區塊 */}
         <div className="glass-panel" style={{ padding: '24px', borderRadius: '12px' }}>
-          <h3 style={{ margin: '0 0 16px 0', color: 'var(--primary-color)' }}>➕ 邀請共同管理員</h3>
+          <h3 style={{ margin: '0 0 16px 0', color: 'var(--primary-color)' }}>➕ 直接加入管理員</h3>
           <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', marginBottom: '16px' }}>
-            搜尋並選擇一位「已使用 Google 登入過本系統」的教練信箱，將其設為共同管理員。
+            如果您知道對方「已登入過本系統」的 Google 信箱，可以直接輸入信箱將其設為共同管理員。
           </p>
           
-          {loadingUsers ? (
-            <p style={{ color: '#888' }}>載入使用者名單中...</p>
-          ) : (
-            <form onSubmit={handleAssignAdmin} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              <input 
-                type="text" 
-                placeholder="輸入信箱關鍵字搜尋..." 
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid var(--glass-border)', background: 'rgba(255,255,255,0.1)', color: 'white' }}
-              />
-              
-              <div style={{ maxHeight: '200px', overflowY: 'auto', border: '1px solid var(--glass-border)', borderRadius: '8px', background: 'rgba(0,0,0,0.3)' }}>
-                {users
-                  .filter(u => u.email.toLowerCase().includes(searchQuery.toLowerCase()))
-                  .map(u => (
-                  <div 
-                    key={u.id} 
-                    onClick={() => setSelectedEmail(u.email)}
-                    style={{ 
-                      padding: '12px', 
-                      cursor: 'pointer', 
-                      borderBottom: '1px solid rgba(255,255,255,0.05)',
-                      backgroundColor: selectedEmail === u.email ? 'var(--primary-color)' : 'transparent',
-                      transition: 'background 0.2s'
-                    }}
-                  >
-                    {u.email}
-                  </div>
-                ))}
-                {users.filter(u => u.email.toLowerCase().includes(searchQuery.toLowerCase())).length === 0 && (
-                  <div style={{ padding: '12px', color: '#888', textAlign: 'center' }}>找不到符合的信箱</div>
-                )}
-              </div>
-
-              <button 
-                type="submit" 
-                className="btn-primary" 
-                disabled={!selectedEmail}
-                style={{ marginTop: '12px', padding: '12px', opacity: selectedEmail ? 1 : 0.5, cursor: selectedEmail ? 'pointer' : 'not-allowed' }}
-              >
-                {selectedEmail ? `指派 ${selectedEmail}` : '請先選擇信箱'}
-              </button>
-            </form>
-          )}
+          <form onSubmit={handleAssignAdmin} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            <input 
+              type="email" 
+              required
+              placeholder="例如: coach@gmail.com" 
+              value={selectedEmail}
+              onChange={(e) => setSelectedEmail(e.target.value)}
+              style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid var(--glass-border)', background: 'rgba(255,255,255,0.1)', color: 'white' }}
+            />
+            
+            <button 
+              type="submit" 
+              className="btn-primary" 
+              disabled={!selectedEmail}
+              style={{ marginTop: '12px', padding: '12px', opacity: selectedEmail ? 1 : 0.5, cursor: selectedEmail ? 'pointer' : 'not-allowed' }}
+            >
+              確認指派
+            </button>
+          </form>
         </div>
 
         {/* 邀請碼區塊 */}
