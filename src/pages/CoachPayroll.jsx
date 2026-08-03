@@ -23,7 +23,7 @@ const CoachPayroll = ({ teamId, forcedTab, hideSubTabs }) => {
 
   // Roster state
   const [showAddCoach, setShowAddCoach] = useState(false);
-  const [newCoach, setNewCoach] = useState({ name: '', default_hourly_rate: 500 });
+  const [newCoach, setNewCoach] = useState({ name: '', default_hourly_rate: 0 });
   const [teamMembers, setTeamMembers] = useState([]);
   const [suggestions, setSuggestions] = useState([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -33,9 +33,8 @@ const CoachPayroll = ({ teamId, forcedTab, hideSubTabs }) => {
   // Attendance state
   const [newAttendance, setNewAttendance] = useState({
     work_date: new Date().toISOString().split('T')[0],
+    work_time: new Date().toTimeString().substring(0, 5),
     coach_id: '',
-    hours_worked: 1,
-    hourly_rate: 0
   });
 
   // Admin Search State
@@ -57,6 +56,23 @@ const CoachPayroll = ({ teamId, forcedTab, hideSubTabs }) => {
     }
   }, [teamId, activeTab, searchMonth, searchCoachId, currentUserId]);
 
+  const summaryByCoach = useMemo(() => {
+    const summary = {};
+    attendance.forEach(record => {
+      const cid = record.coach_id;
+      if (!summary[cid]) {
+        summary[cid] = {
+          name: record.coaches?.name || '未知教練',
+          total_hours: 0,
+          total_pay: 0
+        };
+      }
+      summary[cid].total_hours += Number(record.hours_worked);
+      summary[cid].total_pay += Number(record.total_pay);
+    });
+    return Object.values(summary);
+  }, [attendance]);
+
   const fetchCoaches = async () => {
     const { data, error } = await supabase
       .from('coaches')
@@ -72,8 +88,7 @@ const CoachPayroll = ({ teamId, forcedTab, hideSubTabs }) => {
       if (myCoachRecord && !newAttendance.coach_id) {
         setNewAttendance(prev => ({ 
           ...prev, 
-          coach_id: myCoachRecord.id, 
-          hourly_rate: myCoachRecord.default_hourly_rate 
+          coach_id: myCoachRecord.id 
         }));
       }
     }
@@ -147,14 +162,14 @@ const CoachPayroll = ({ teamId, forcedTab, hideSubTabs }) => {
   // --- Handlers ---
   const handleAddCoach = async (e) => {
     e.preventDefault();
-    if (!newCoach.name.trim() || !selectedUserId) {
-      Swal.fire({ title: '錯誤', text: '請輸入並選擇教練信箱', icon: 'error', background: '#1a1a2e', color: '#fff' });
+    if (!newCoach.name.trim()) {
+      Swal.fire({ title: '錯誤', text: '請填寫教練顯示名稱', icon: 'error', background: '#1a1a2e', color: '#fff' });
       return;
     }
     setLoading(true);
     const { error } = await supabase.from('coaches').insert({
       team_id: teamId,
-      user_id: selectedUserId,
+      user_id: selectedUserId || null,
       name: newCoach.name,
       default_hourly_rate: newCoach.default_hourly_rate
     });
@@ -162,7 +177,7 @@ const CoachPayroll = ({ teamId, forcedTab, hideSubTabs }) => {
     if (error) {
       Swal.fire({ title: '錯誤', text: error.message, icon: 'error', background: '#1a1a2e', color: '#fff' });
     } else {
-      setNewCoach({ name: '', default_hourly_rate: 500 });
+      setNewCoach({ name: '', default_hourly_rate: 0 });
       setSelectedEmail('');
       setSelectedUserId(null);
       setShowAddCoach(false);
@@ -175,6 +190,31 @@ const CoachPayroll = ({ teamId, forcedTab, hideSubTabs }) => {
   const toggleCoachActive = async (id, currentStatus) => {
     await supabase.from('coaches').update({ is_active: !currentStatus }).eq('id', id);
     fetchCoaches();
+  };
+
+  const deleteCoach = async (id) => {
+    const result = await Swal.fire({
+      title: '確定要刪除此教練？',
+      text: "⚠️ 警告：刪除教練將會「永久清除」該教練過去所有的簽到與薪資紀錄！如果該教練曾經有打卡紀錄，強烈建議您使用右上角的「已離職」按鈕即可。確定要永久刪除嗎？",
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#ff6b6b',
+      cancelButtonColor: '#555',
+      confirmButtonText: '是的，永久刪除',
+      cancelButtonText: '取消',
+      background: '#1a1a2e',
+      color: '#fff'
+    });
+
+    if (result.isConfirmed) {
+      const { error } = await supabase.from('coaches').delete().eq('id', id);
+      if (error) {
+        Swal.fire({ title: '刪除失敗', text: error.message, icon: 'error', background: '#1a1a2e', color: '#fff' });
+      } else {
+        Swal.fire({ title: '已刪除', icon: 'success', toast: true, position: 'top-end', showConfirmButton: false, timer: 2000, background: '#1a1a2e', color: '#fff' });
+        fetchCoaches();
+      }
+    }
   };
 
   const updateCoachRate = async (id, newRate) => {
@@ -192,17 +232,18 @@ const CoachPayroll = ({ teamId, forcedTab, hideSubTabs }) => {
 
   const handleAddAttendance = async (e) => {
     e.preventDefault();
-    if (!newAttendance.coach_id || newAttendance.hours_worked <= 0) return;
+    if (!newAttendance.coach_id) return;
 
     setLoading(true);
-    const total_pay = newAttendance.hours_worked * newAttendance.hourly_rate;
+
     const { error } = await supabase.from('coach_attendance').insert([{
       team_id: teamId,
       coach_id: newAttendance.coach_id,
       work_date: newAttendance.work_date,
-      hours_worked: newAttendance.hours_worked,
-      hourly_rate: newAttendance.hourly_rate,
-      total_pay: total_pay
+      work_time: newAttendance.work_time,
+      hours_worked: 1, // 預設給1，實際時數後續由系統依照兩次打卡計算
+      hourly_rate: 0,
+      total_pay: 0
     }]);
 
     if (error) {
@@ -288,14 +329,17 @@ const CoachPayroll = ({ teamId, forcedTab, hideSubTabs }) => {
                   <label style={{ display: 'block', marginBottom: '5px', fontSize: '0.9rem' }}>日期</label>
                   <input type="date" required value={newAttendance.work_date} onChange={e => setNewAttendance({...newAttendance, work_date: e.target.value})} style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid var(--glass-border)', background: 'rgba(255,255,255,0.1)', color: 'white' }} />
                 </div>
+                <div style={{ flex: 1, minWidth: '130px' }}>
+                  <label style={{ display: 'block', marginBottom: '5px', fontSize: '0.9rem' }}>打卡時間</label>
+                  <input type="time" required value={newAttendance.work_time} onChange={e => setNewAttendance({...newAttendance, work_time: e.target.value})} style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid var(--glass-border)', background: 'rgba(255,255,255,0.1)', color: 'white' }} />
+                </div>
                 <div style={{ flex: 1, minWidth: '150px' }}>
                   <label style={{ display: 'block', marginBottom: '5px', fontSize: '0.9rem' }}>教練</label>
                   <select 
                     required 
                     value={newAttendance.coach_id} 
                     onChange={e => {
-                      const coach = coaches.find(c => c.id === e.target.value);
-                      setNewAttendance({...newAttendance, coach_id: e.target.value, hourly_rate: coach?.default_hourly_rate || 0});
+                      setNewAttendance({...newAttendance, coach_id: e.target.value});
                     }}
                     style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid var(--glass-border)', background: 'rgba(255,255,255,0.1)', color: 'white' }}
                   >
@@ -304,17 +348,10 @@ const CoachPayroll = ({ teamId, forcedTab, hideSubTabs }) => {
                     ))}
                   </select>
                 </div>
-                <div style={{ flex: 1, minWidth: '100px' }}>
-                  <label style={{ display: 'block', marginBottom: '5px', fontSize: '0.9rem' }}>時數</label>
-                  <input type="number" required min="0.5" step="0.5" value={newAttendance.hours_worked} onChange={e => setNewAttendance({...newAttendance, hours_worked: e.target.value})} style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid var(--glass-border)', background: 'rgba(255,255,255,0.1)', color: 'white' }} />
-                </div>
-                <div style={{ flex: 1, minWidth: '100px' }}>
-                  <label style={{ display: 'block', marginBottom: '5px', fontSize: '0.9rem' }}>當次時薪 ($)</label>
-                  <input type="number" required min="0" value={newAttendance.hourly_rate} onChange={e => setNewAttendance({...newAttendance, hourly_rate: e.target.value})} style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid var(--glass-border)', background: 'rgba(255,255,255,0.1)', color: 'white' }} />
-                </div>
+                
                 <div style={{ flexBasis: '100%', marginTop: '10px' }}>
                   <button type="submit" className="btn-primary" style={{ width: '100%', padding: '12px 20px', height: '48px', fontSize: '1.1rem', fontWeight: 'bold' }} disabled={loading}>
-                    儲存簽到 ($ {newAttendance.hours_worked * newAttendance.hourly_rate || 0})
+                    儲存簽到
                   </button>
                 </div>
               </form>
@@ -328,23 +365,16 @@ const CoachPayroll = ({ teamId, forcedTab, hideSubTabs }) => {
                 {attendance.length === 0 && <div style={{ color: '#888', gridColumn: '1/-1' }}>尚無打卡紀錄</div>}
                 {attendance.map(record => (
                   <div key={record.id} className="glass-panel" style={{ padding: '20px', position: 'relative' }}>
-                    <div style={{ color: '#aaa', fontSize: '0.9rem', marginBottom: '8px' }}>{record.work_date}</div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <div style={{ fontSize: '1.2rem', fontWeight: 'bold' }}>{record.hours_worked} hr</div>
-                      <div style={{ color: '#4ade80', fontSize: '1.2rem', fontWeight: 'bold' }}>${record.total_pay}</div>
+                    <div style={{ color: '#aaa', fontSize: '0.9rem', marginBottom: '8px' }}>
+                      {record.work_date} {record.work_time && <span style={{ color: 'var(--primary-color)' }}>({record.work_time})</span>}
                     </div>
-                    <div style={{ color: '#ccc', fontSize: '0.9rem', marginTop: '5px' }}>
-                      時薪: ${record.hourly_rate}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div style={{ fontSize: '1.2rem', fontWeight: 'bold' }}>🕒 打卡紀錄</div>
                     </div>
                     <div style={{ position: 'absolute', top: '20px', right: '20px' }}>
-                      {record.is_paid ? (
-                        <span style={{ color: '#aaa', fontSize: '0.8rem', border: '1px solid #555', padding: '2px 6px', borderRadius: '4px' }}>已結清</span>
-                      ) : (
                         <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-                          <span style={{ color: '#fbbc05', fontSize: '0.8rem', border: '1px solid rgba(251,188,5,0.3)', background: 'rgba(251,188,5,0.1)', padding: '2px 6px', borderRadius: '4px' }}>未發放</span>
                           <button onClick={() => deleteAttendance(record.id)} style={{ background: 'none', border: 'none', color: '#ff6b6b', cursor: 'pointer' }}>🗑️</button>
                         </div>
-                      )}
                     </div>
                   </div>
                 ))}
@@ -379,38 +409,43 @@ const CoachPayroll = ({ teamId, forcedTab, hideSubTabs }) => {
           </div>
 
           {loading ? <div style={{ color: '#aaa', textAlign: 'center' }}>載入中...</div> : (
-            <div style={{ display: 'grid', gap: '15px', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))' }}>
-              {attendance.length === 0 && <div style={{ color: '#888', gridColumn: '1/-1' }}>此區間無打卡紀錄</div>}
+            <>
+              {summaryByCoach.length > 0 && (
+                <div style={{ marginBottom: '20px', padding: '15px', background: 'rgba(255,255,255,0.05)', borderRadius: '12px', border: '1px solid var(--primary-color)' }}>
+                  <h4 style={{ margin: '0 0 10px 0', color: 'var(--primary-color)' }}>📊 {searchMonth} 教練統計</h4>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '15px' }}>
+                    {summaryByCoach.map(s => (
+                      <div key={s.name} style={{ background: 'rgba(0,0,0,0.3)', padding: '10px 15px', borderRadius: '8px', minWidth: '150px' }}>
+                        <div style={{ fontWeight: 'bold', marginBottom: '5px' }}>{s.name}</div>
+                        <div style={{ fontSize: '0.9rem', color: '#aaa' }}>打卡次數: <span style={{ color: '#fff' }}>{s.records} 次</span></div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              
+              <div style={{ display: 'grid', gap: '15px', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))' }}>
+                {attendance.length === 0 && <div style={{ color: '#888', gridColumn: '1/-1' }}>此區間無打卡紀錄</div>}
               {attendance.map(record => (
                 <div key={record.id} className="glass-panel" style={{ padding: '15px', borderLeft: record.is_paid ? '4px solid #aaa' : '4px solid #fbbc05' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
                     <div style={{ fontWeight: 'bold', fontSize: '1.1rem' }}>{record.coaches?.name}</div>
-                    <div style={{ color: '#aaa', fontSize: '0.9rem' }}>{record.work_date}</div>
+                    <div style={{ color: '#aaa', fontSize: '0.9rem' }}>
+                      {record.work_date} {record.work_time && <span style={{ color: 'var(--primary-color)' }}>({record.work_time})</span>}
+                    </div>
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <div>
-                      <div style={{ fontSize: '1.2rem', fontWeight: 'bold' }}>{record.hours_worked} hr</div>
-                      <div style={{ color: '#ccc', fontSize: '0.8rem' }}>時薪: ${record.hourly_rate}</div>
-                    </div>
-                    <div style={{ textAlign: 'right' }}>
-                      <div style={{ color: '#4ade80', fontSize: '1.2rem', fontWeight: 'bold' }}>${record.total_pay}</div>
-                      <div style={{ fontSize: '0.8rem', marginTop: '4px' }}>
-                        {record.is_paid ? (
-                          <span style={{ color: '#aaa' }}>已結清</span>
-                        ) : (
-                          <span style={{ color: '#fbbc05' }}>未發放</span>
-                        )}
-                      </div>
+                      <div style={{ fontSize: '1.2rem', fontWeight: 'bold' }}>🕒 打卡紀錄</div>
                     </div>
                   </div>
-                  {!record.is_paid && (
-                    <button onClick={() => deleteAttendance(record.id)} style={{ width: '100%', marginTop: '15px', padding: '8px', background: 'rgba(255,107,107,0.1)', color: '#ff6b6b', border: '1px solid rgba(255,107,107,0.3)', borderRadius: '6px' }}>
-                      刪除紀錄
-                    </button>
-                  )}
+                  <button onClick={() => deleteAttendance(record.id)} style={{ width: '100%', marginTop: '15px', padding: '8px', background: 'rgba(255,107,107,0.1)', color: '#ff6b6b', border: '1px solid rgba(255,107,107,0.3)', borderRadius: '6px' }}>
+                    刪除紀錄
+                  </button>
                 </div>
               ))}
             </div>
+          </>
           )}
         </div>
       )}
@@ -429,10 +464,9 @@ const CoachPayroll = ({ teamId, forcedTab, hideSubTabs }) => {
               <h4 style={{ marginTop: 0 }}>輸入系統成員信箱來綁定教練</h4>
               <form onSubmit={handleAddCoach} style={{ display: 'flex', gap: '15px', flexWrap: 'wrap', alignItems: 'flex-end' }}>
                 <div style={{ flex: 1, minWidth: '200px', position: 'relative' }}>
-                  <label style={{ display: 'block', marginBottom: '5px', fontSize: '0.9rem' }}>成員信箱搜尋</label>
+                  <label style={{ display: 'block', marginBottom: '5px', fontSize: '0.9rem' }}>成員信箱搜尋 (選填，綁定帳號用)</label>
                   <input 
                     type="email" 
-                    required 
                     value={selectedEmail} 
                     onChange={handleEmailChange} 
                     placeholder="輸入信箱自動搜尋同球隊成員..."
@@ -462,10 +496,6 @@ const CoachPayroll = ({ teamId, forcedTab, hideSubTabs }) => {
                 <div style={{ flex: 1, minWidth: '150px' }}>
                   <label style={{ display: 'block', marginBottom: '5px', fontSize: '0.9rem' }}>教練顯示名稱</label>
                   <input type="text" required value={newCoach.name} onChange={e => setNewCoach({...newCoach, name: e.target.value})} style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid var(--glass-border)', background: 'rgba(255,255,255,0.1)', color: 'white' }} />
-                </div>
-                <div style={{ flex: 1, minWidth: '150px' }}>
-                  <label style={{ display: 'block', marginBottom: '5px', fontSize: '0.9rem' }}>預設時薪 ($)</label>
-                  <input type="number" required min="0" value={newCoach.default_hourly_rate} onChange={e => setNewCoach({...newCoach, default_hourly_rate: e.target.value})} style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid var(--glass-border)', background: 'rgba(255,255,255,0.1)', color: 'white' }} />
                 </div>
                 <button type="submit" className="btn-primary" style={{ padding: '10px 20px', height: '42px' }} disabled={loading}>
                   儲存教練
@@ -505,18 +535,14 @@ const CoachPayroll = ({ teamId, forcedTab, hideSubTabs }) => {
                 />
                 
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px', opacity: coach.is_active ? 1 : 0.5 }}>
-                  <span style={{ fontSize: '0.9rem', color: '#aaa' }}>預設時薪: $</span>
-                  <input 
-                    type="number" 
-                    value={coach.default_hourly_rate} 
-                    onBlur={(e) => {
-                      if (e.target.value != coach.default_hourly_rate) {
-                        updateCoachRate(coach.id, e.target.value);
-                      }
-                    }}
-                    onChange={() => {}}
-                    style={{ width: '80px', padding: '4px 8px', borderRadius: '4px', border: '1px solid var(--glass-border)', background: 'rgba(255,255,255,0.1)', color: 'white' }}
-                  />
+                  
+                  <button 
+                    onClick={() => deleteCoach(coach.id)}
+                    style={{ marginLeft: 'auto', background: 'transparent', border: '1px solid rgba(255,107,107,0.5)', color: '#ff6b6b', padding: '4px 8px', borderRadius: '4px', cursor: 'pointer', fontSize: '0.8rem' }}
+                    title="永久刪除教練"
+                  >
+                    🗑️ 刪除
+                  </button>
                 </div>
               </div>
             ))}

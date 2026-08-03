@@ -203,7 +203,7 @@ const TeamSettings = ({ teamId }) => {
             </button>
           </div>
           <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', marginBottom: '16px' }}>
-            不想手動搜尋信箱？您可以產生一組邀請碼丟到群組中。其他教練登入後輸入此碼，就能直接加入共同管理。
+            不想手動搜尋信箱？您可以產生一組邀請碼丟到群組中。其他教練登入後輸入此碼，就能直接加入成為「一般教練」，方便他們自己簽到打卡。
           </p>
           
           {loadingInvites ? (

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { supabase } from '../config/supabaseClient';
 import { useAuth } from '../contexts/AuthContext';
 import TeamManagement from '../components/TeamManagement';
@@ -22,6 +22,27 @@ const Dashboard = () => {
   const handleSubTabChange = (teamId, tab) => {
     setTeamSubTabs(prev => ({ ...prev, [teamId]: tab }));
   };
+
+  useEffect(() => {
+    let titleStr = "福山國小桌球隊作帳系統";
+    if (activeTab === 'superadmin') {
+      titleStr = "最高控制台 | 作帳系統";
+    } else {
+      const team = adminRoles.find(r => r.team_id === activeTab);
+      if (team) {
+        let subTabName = "簽到登記";
+        const currentSubTab = teamSubTabs[activeTab] || 'attendance';
+        if (currentSubTab === 'roster') subTabName = "球員名冊";
+        if (currentSubTab === 'billing') subTabName = "帳務收費";
+        if (currentSubTab === 'coaches') subTabName = "教練名冊";
+        if (currentSubTab === 'attendance_search') subTabName = "簽到查詢";
+        if (currentSubTab === 'print') subTabName = "列印中心";
+        if (currentSubTab === 'settings') subTabName = "系統設定";
+        titleStr = `${subTabName} | 作帳系統`;
+      }
+    }
+    document.title = titleStr;
+  }, [activeTab, teamSubTabs, adminRoles]);
 
   const handleCreateTeam = async () => {
     const teamName = window.prompt('請輸入新球隊名稱：');
@@ -50,9 +71,9 @@ const Dashboard = () => {
   };
 
   return (
-    <div style={{ padding: '20px', maxWidth: '1000px', margin: '0 auto' }}>
+    <div className="dashboard-container" style={{ maxWidth: '1000px', margin: '0 auto' }}>
       {/* 內容區域 */}
-      <div className="glass-panel" style={{ padding: '32px' }}>
+      <div className="glass-panel dashboard-panel">
         
         {/* 超級管理員頁面 */}
         {activeTab === 'superadmin' && isSuperAdmin && (

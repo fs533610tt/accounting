@@ -211,21 +211,8 @@ const StudentList = ({ teamId }) => {
     <div style={{ marginTop: '30px' }}>
       <div className="flex-mobile-column" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', gap: '15px' }}>
         <div className="action-buttons-container" style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', justifyContent: 'center' }}>
-          <button 
-            onClick={handleBulkPromote}
-            disabled={students.length === 0}
-            style={{ 
-              background: 'linear-gradient(135deg, #FF9A9E 0%, #FECFEF 100%)', 
-              color: '#333', 
-              border: 'none', 
-              padding: '8px 16px', 
-              borderRadius: '8px', 
-              cursor: students.length === 0 ? 'not-allowed' : 'pointer',
-              fontWeight: 'bold',
-              boxShadow: '0 4px 15px rgba(255, 154, 158, 0.3)'
-            }}
-          >
-            🚀 一鍵升年級
+          <button className="btn-primary" onClick={() => setShowAddForm(!showAddForm)}>
+            {showAddForm ? '取消新增' : '+ 新增球員'}
           </button>
           <button 
             onClick={() => setShowInactive(!showInactive)}
@@ -257,8 +244,21 @@ const StudentList = ({ teamId }) => {
           >
             📊 匯出 Excel
           </button>
-          <button className="btn-primary" onClick={() => setShowAddForm(!showAddForm)}>
-            {showAddForm ? '取消新增' : '+ 新增球員'}
+          <button 
+            onClick={handleBulkPromote}
+            disabled={students.length === 0}
+            style={{ 
+              background: 'linear-gradient(135deg, #FF9A9E 0%, #FECFEF 100%)', 
+              color: '#333', 
+              border: 'none', 
+              padding: '8px 16px', 
+              borderRadius: '8px', 
+              cursor: students.length === 0 ? 'not-allowed' : 'pointer',
+              fontWeight: 'bold',
+              boxShadow: '0 4px 15px rgba(255, 154, 158, 0.3)'
+            }}
+          >
+            🚀 一鍵升年級
           </button>
         </div>
       </div>

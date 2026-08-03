@@ -158,12 +158,23 @@ body {
 
   /* 手機版導覽列與主畫面縮小邊距 */
   .app-header {
-    margin: 8px !important;
-    padding: 10px 16px !important;
-    border-radius: 8px !important;
+    margin: 4px !important;
+    padding: 6px 12px !important;
+    border-radius: 6px !important;
   }
   .app-main {
+    padding: 4px !important;
+  }
+  
+  /* 移除 Dashboard 的大片留白，讓空間留給重點操作 */
+  .dashboard-container {
+    padding: 5px !important;
+  }
+  .dashboard-panel {
     padding: 10px !important;
+    border: none !important;
+    background: transparent !important;
+    box-shadow: none !important;
   }
 
   /* 優化操作按鈕容器 (改為雙排網格排列，節省垂直空間) */

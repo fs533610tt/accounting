@@ -4,12 +4,13 @@ import BillingDetail from './BillingDetail';
 import TeamLedger from './TeamLedger';
 import CoachPayrollTab from './CoachPayrollTab';
 import FinancialOverview from './FinancialOverview';
+import FeePresetsSettings from './FeePresetsSettings';
 
 const BillingDashboard = ({ teamId }) => {
   const [cycles, setCycles] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showCreateForm, setShowCreateForm] = useState(false);
-  const [newCycle, setNewCycle] = useState({ name: '', default_amount: 1000, billing_month: new Date().toISOString().slice(0, 7) });
+  const [newCycle, setNewCycle] = useState({ name: '', default_amount: 0, billing_month: new Date().toISOString().slice(0, 7) });
   const [selectedCycleId, setSelectedCycleId] = useState(null);
   const [activeTab, setActiveTab] = useState('tuition');
 
@@ -48,7 +49,7 @@ const BillingDashboard = ({ teamId }) => {
       .insert([{ 
         team_id: teamId, 
         name: newCycle.name, 
-        default_amount: newCycle.default_amount || 0,
+        default_amount: 0,
         billing_month: newCycle.billing_month
       }])
       .select();
@@ -75,7 +76,7 @@ const BillingDashboard = ({ teamId }) => {
       const recordsToInsert = activeStudents.map(student => ({
         cycle_id: newCycleId,
         student_id: student.id,
-        amount_due: newCycle.default_amount || 0,
+        amount_due: 0,
         amount_paid: 0,
         status: 'pending'
       }));
@@ -89,10 +90,31 @@ const BillingDashboard = ({ teamId }) => {
       }
     }
 
-    alert('✅ 帳單建立成功！已自動發布給所有在隊球員。');
+    alert('✅ 帳單建立成功！所有在隊球員已列入未指定費用名單。');
     setShowCreateForm(false);
-    setNewCycle({ name: '', default_amount: 1000, billing_month: new Date().toISOString().slice(0, 7) });
+    setNewCycle({ name: '', default_amount: 0, billing_month: new Date().toISOString().slice(0, 7) });
     fetchCycles();
+  };
+
+  const handleDeleteCycle = async (e, id, name) => {
+    e.stopPropagation(); // Prevent triggering the card click
+    if (!window.confirm(`警告：確定要刪除「${name}」嗎？這會同時刪除該月份所有的收費紀錄，且無法復原！`)) {
+      return;
+    }
+    
+    setLoading(true);
+    const { error } = await supabase
+      .from('billing_cycles')
+      .delete()
+      .eq('id', id);
+
+    if (error) {
+      alert('刪除失敗：' + error.message);
+    } else {
+      alert('刪除成功！');
+      fetchCycles();
+    }
+    setLoading(false);
   };
 
   // 如果選擇了某個帳單週期，就切換到明細畫面
@@ -157,6 +179,17 @@ const BillingDashboard = ({ teamId }) => {
         >
           📊 月結總損益
         </button>
+        <button 
+          onClick={() => setActiveTab('presets')}
+          style={{ 
+            background: 'none', border: 'none', color: activeTab === 'presets' ? '#f472b6' : '#aaa', 
+            padding: '10px 20px', fontSize: '1rem', fontWeight: 'bold', cursor: 'pointer',
+            borderBottom: activeTab === 'presets' ? '3px solid #f472b6' : '3px solid transparent',
+            flexShrink: 0
+          }}
+        >
+          🏷️ 快速收費標籤
+        </button>
       </div>
 
       {activeTab === 'ledger' ? (
@@ -165,6 +198,8 @@ const BillingDashboard = ({ teamId }) => {
         <CoachPayrollTab teamId={teamId} />
       ) : activeTab === 'overview' ? (
         <FinancialOverview teamId={teamId} />
+      ) : activeTab === 'presets' ? (
+        <FeePresetsSettings teamId={teamId} />
       ) : (
         <>
           <div className="flex-mobile-column" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', gap: '15px' }}>
@@ -202,23 +237,12 @@ const BillingDashboard = ({ teamId }) => {
                 style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid var(--glass-border)', background: 'rgba(255,255,255,0.1)', color: 'white' }}
               />
             </div>
-            <div style={{ flex: 1, minWidth: '150px' }}>
-              <label style={{ display: 'block', marginBottom: '5px', fontSize: '0.9rem' }}>公定預設金額 ($)</label>
-              <input 
-                type="number" 
-                required
-                min="0"
-                value={newCycle.default_amount} 
-                onChange={e => setNewCycle({...newCycle, default_amount: e.target.value === '' ? '' : Number(e.target.value)})}
-                style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid var(--glass-border)', background: 'rgba(255,255,255,0.1)', color: 'white' }}
-              />
-            </div>
             <button type="submit" className="btn-primary" style={{ padding: '10px 20px', height: '42px' }} disabled={loading}>
               {loading ? '處理中...' : '確認產生帳單'}
             </button>
           </form>
           <p style={{ fontSize: '0.8rem', color: '#aaa', marginTop: '10px' }}>
-            提示：送出後，系統會自動幫目前名冊上「所有在隊」的球員產生對應的明細。如果有幹部折扣或請假退費，可以稍後進入明細個別修改。
+            提示：送出後，系統會自動把所有球員加入本月名單，且初始費用皆為 0 元 (未指定)。稍後您可以點擊進入明細畫面，使用標籤進行批次分發收費。
           </p>
         </div>
       )}
@@ -252,11 +276,19 @@ const BillingDashboard = ({ teamId }) => {
                   <h3 style={{ margin: 0, fontSize: '1.2rem', marginBottom: '4px' }}>{cycle.name}</h3>
                   {cycle.billing_month && <div style={{ fontSize: '0.85rem', color: '#fbbc05' }}>月份: {cycle.billing_month}</div>}
                 </div>
-                {cycle.status === 'active' ? (
-                  <span style={{ background: 'rgba(74, 222, 128, 0.2)', color: '#4ade80', padding: '4px 8px', borderRadius: '4px', fontSize: '0.8rem' }}>收費中</span>
-                ) : (
-                  <span style={{ background: 'rgba(255, 255, 255, 0.1)', color: '#aaa', padding: '4px 8px', borderRadius: '4px', fontSize: '0.8rem' }}>已結算</span>
-                )}
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                  {cycle.status === 'active' ? (
+                    <span style={{ background: 'rgba(74, 222, 128, 0.2)', color: '#4ade80', padding: '4px 8px', borderRadius: '4px', fontSize: '0.8rem' }}>收費中</span>
+                  ) : (
+                    <span style={{ background: 'rgba(255, 255, 255, 0.1)', color: '#aaa', padding: '4px 8px', borderRadius: '4px', fontSize: '0.8rem' }}>已結算</span>
+                  )}
+                  <button 
+                    onClick={(e) => handleDeleteCycle(e, cycle.id, cycle.name)}
+                    style={{ background: 'transparent', border: '1px solid rgba(255,107,107,0.5)', color: '#ff6b6b', padding: '4px 8px', borderRadius: '4px', fontSize: '0.8rem', cursor: 'pointer' }}
+                  >
+                    刪除
+                  </button>
+                </div>
               </div>
               <div style={{ color: '#ccc', fontSize: '0.9rem', marginBottom: '5px' }}>
                 公定金額：<strong style={{ color: 'white' }}>${cycle.default_amount}</strong>
