@@ -6,9 +6,10 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "build:gh": "vite build --base=/accounting/",
     "lint": "oxlint",
     "preview": "vite preview",
-    "predeploy": "npm run build",
+    "predeploy": "npm run build:gh",
     "deploy": "gh-pages -d dist",
     "backup": "git add . && git commit -m \"自動備份 (Auto-backup)\" && git push origin main"
   },

@@ -1,9 +1,12 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Navigate, Outlet } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 
 const AdminLayout = () => {
-  const { user, isSuperAdmin, logout } = useAuth();
+  const { user, isSuperAdmin, userRoles, logout } = useAuth();
+  
+  const adminRoles = userRoles ? userRoles.filter(r => r.role !== 'superadmin') : [];
+  const [activeTab, setActiveTab] = useState(isSuperAdmin ? 'superadmin' : (adminRoles.length > 0 ? adminRoles[0].team_id : 'none'));
 
   if (!user) {
     return <Navigate to="/login" replace />;
@@ -18,6 +21,30 @@ const AdminLayout = () => {
           {isSuperAdmin && <span style={{ fontSize: '0.8rem', backgroundColor: 'var(--primary-color)', padding: '2px 8px', borderRadius: '12px', marginTop: '4px', display: 'inline-block' }}>Super Admin</span>}
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+          
+          {/* 球隊切換選單 */}
+          {userRoles && userRoles.length > 0 && (
+            <select 
+              value={activeTab}
+              onChange={(e) => setActiveTab(e.target.value)}
+              style={{
+                padding: '6px 12px',
+                borderRadius: '6px',
+                background: 'rgba(255,255,255,0.1)',
+                border: '1px solid rgba(255,255,255,0.2)',
+                color: 'white',
+                outline: 'none',
+                cursor: 'pointer',
+                maxWidth: '150px'
+              }}
+            >
+              {isSuperAdmin && <option value="superadmin" style={{ background: '#1a1a2e', color: 'white' }}>👑 系統管理中心</option>}
+              {adminRoles.map(role => (
+                <option key={role.team_id} value={role.team_id} style={{ background: '#1a1a2e', color: 'white' }}>🏓 {role.teams?.name}</option>
+              ))}
+            </select>
+          )}
+
           <span className="hide-on-mobile">{user.email}</span>
           <button className="btn-primary" onClick={logout} style={{ padding: '6px 16px', width: 'auto', fontSize: '0.9rem' }}>登出</button>
         </div>
@@ -25,7 +52,7 @@ const AdminLayout = () => {
 
       {/* 主內容區塊 */}
       <main className="app-main" style={{ flex: 1 }}>
-        <Outlet />
+        <Outlet context={{ activeTab }} />
       </main>
 
       {/* 頁尾 - 顯示版本時間 */}

@@ -18,9 +18,17 @@
   - **一鍵產生月費**：輸入公定價，系統自動抓取所有「在隊」球員，瞬間生成全隊帳單。
   - **個別微調與對帳**：支援幹部折扣、請假退費的金額修改，並具備「一鍵繳清」功能，對帳清楚明瞭。
 
+- 📒 **球隊公積金記帳本 (Team Ledger)**
+  - **收支明細管理**：紀錄球隊的各項支出與收入，並能透過「月份篩選器」快速查閱歷史帳目。
+  - **收據圖片上傳**：結合 Supabase Storage 私有儲存桶，安全地保存實體收據照片，防外流且僅限管理員存取。
+  - **代墊款核銷**：清楚標示並追蹤教練或家長的「待核銷代墊款」。
+
 - 🖨️ **學費袋精準套印 (Print Envelopes)**
   - 結合 CSS `@media print` 技術，直接將網頁上的帳單明細，精準套印到實體的「西式黃色信封袋」上。
   - 自動隱藏無關的網頁元素，並強制每印完一人自動換頁。
+
+- 📱 **完美的手機版體驗 (Mobile-First UX)**
+  - 響應式卡片設計 (Card View) 取代傳統表格，並提供流暢的 SweetAlert2 彈跳視窗與滿版按鈕，讓教練在球場上用手機也能輕鬆操作。
 
 ## 🛠️ 技術堆疊 (Tech Stack)
 
@@ -53,18 +61,12 @@ cp .env.example .env
 ```
 打開 `.env` 檔案，填入您專屬的 Supabase 網址與匿名金鑰 (Anon Key)。
 
-### 3. 資料庫建置 (Supabase)
-請進入 Supabase 的 **SQL Editor**，並「**依序**」執行本專案 `docs/sql/` 目錄下的所有 SQL 腳本：
-- `01_schema.sql`：核心資料表結構
-- `02_rls_and_functions.sql`：安全權限與觸發器
-- `03_phase3_schema.sql`：多租戶架構
-- `04_phase3_rls.sql`：多租戶權限
-- `05_admin_management.sql`：管理員面板
-- `06_add_student_note.sql` & `07_add_student_status.sql`：球員備註與狀態
-- `08_billing_schema.sql`：帳務系統結構
-- `09_billing_rls.sql`：帳務系統權限
+### 3. 資料庫與儲存空間建置 (Supabase)
+請進入 Supabase 的 **SQL Editor**，執行本專案 `docs/sql/` 目錄下的整合腳本：
+- `00_master_init.sql`：這是一份已經打包好的完整腳本，包含了核心資料表、多租戶架構、安全性政策 (RLS)、帳務系統與記帳本功能。直接全部複製貼上並執行即可！
 
-> **💡 開發提示**：如果您想檢查資料庫結構是否正確建立，可以執行 `99_health_check.sql`。
+> **💡 建立私有儲存桶 (Storage)**：
+> 執行完 SQL 後，請到 Supabase 後台的 **Storage** 頁面，點擊 **New Bucket**，建立一個名為 `receipts` 的儲存桶，並且 **絕對不要勾選 Public bucket**，以保護收據隱私。
 
 ### 4. 本地端開發測試
 ```bash
@@ -72,11 +74,22 @@ npm run dev
 ```
 啟動後，打開瀏覽器造訪 `http://localhost:5173` 即可看到開發中的畫面。
 
-### 5. 發布至線上 (Deploy to GitHub Pages)
-我們使用了 `gh-pages` 套件，只要下達以下指令，系統就會自動編譯並推送到線上！
+### 5. 發布至線上 (Deployment)
+我們已經設定好多重發布環境：
+
+**發布到 GitHub Pages:**
+使用 `gh-pages` 套件，只要下達以下指令，系統會自動使用 `/accounting/` 基礎路徑編譯並推送到線上！
 ```bash
 npm run deploy
 ```
+
+**發布到私人主機:**
+如果您要放在自己的主機網域 (例如 `https://www.my-team.com`)，請直接打包：
+```bash
+npm run build
+```
+然後將產生的 `dist` 資料夾內容放到主機的網頁目錄下即可。
+*(請記得前往 Supabase 後台更新 Authentication -> URL Configuration 的 Site URL 與 Redirect URLs)*
 
 ---
 

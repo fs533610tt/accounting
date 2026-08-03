@@ -46,7 +46,7 @@ const BillingDashboard = ({ teamId }) => {
       .insert([{ 
         team_id: teamId, 
         name: newCycle.name, 
-        default_amount: newCycle.default_amount,
+        default_amount: newCycle.default_amount || 0,
         billing_month: newCycle.billing_month
       }])
       .select();
@@ -73,7 +73,7 @@ const BillingDashboard = ({ teamId }) => {
       const recordsToInsert = activeStudents.map(student => ({
         cycle_id: newCycleId,
         student_id: student.id,
-        amount_due: newCycle.default_amount,
+        amount_due: newCycle.default_amount || 0,
         amount_paid: 0,
         status: 'pending'
       }));
@@ -179,7 +179,7 @@ const BillingDashboard = ({ teamId }) => {
                 required
                 min="0"
                 value={newCycle.default_amount} 
-                onChange={e => setNewCycle({...newCycle, default_amount: Number(e.target.value)})}
+                onChange={e => setNewCycle({...newCycle, default_amount: e.target.value === '' ? '' : Number(e.target.value)})}
                 style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid var(--glass-border)', background: 'rgba(255,255,255,0.1)', color: 'white' }}
               />
             </div>

@@ -5,15 +5,14 @@ import TeamManagement from '../components/TeamManagement';
 import StudentList from '../components/StudentList';
 import BillingDashboard from '../components/BillingDashboard';
 import TeamSettings from '../components/TeamSettings';
+import { useOutletContext } from 'react-router-dom';
 
 const Dashboard = () => {
   const { user, isSuperAdmin, userRoles } = useAuth();
+  const { activeTab } = useOutletContext();
   
   // 找出所有管理的球隊
-  const adminRoles = userRoles.filter(r => r.role !== 'superadmin');
-  
-  // 預設 active 頁籤：如果是超級管理員就停在系統中心，否則停在第一支球隊
-  const [activeTab, setActiveTab] = useState(isSuperAdmin ? 'superadmin' : (adminRoles.length > 0 ? adminRoles[0].team_id : 'none'));
+  const adminRoles = userRoles ? userRoles.filter(r => r.role !== 'superadmin') : [];
   
   // 針對個別球隊的子頁籤狀態 (roster: 名冊, billing: 帳務)
   // 用物件儲存每支球隊目前的子頁籤，例如 { 'team_id_1': 'roster', 'team_id_2': 'billing' }
@@ -51,48 +50,8 @@ const Dashboard = () => {
 
   return (
     <div style={{ padding: '20px', maxWidth: '1000px', margin: '0 auto' }}>
-      {/* 頂部導覽列 (Tabs) */}
-      <div style={{ display: 'flex', gap: '10px', borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '10px', overflowX: 'auto' }}>
-        {isSuperAdmin && (
-          <button 
-            onClick={() => setActiveTab('superadmin')}
-            style={{ 
-              padding: '10px 20px', 
-              background: activeTab === 'superadmin' ? 'rgba(255,255,255,0.1)' : 'transparent',
-              border: 'none',
-              borderBottom: activeTab === 'superadmin' ? '2px solid var(--primary-color)' : '2px solid transparent',
-              color: activeTab === 'superadmin' ? '#fff' : '#888',
-              cursor: 'pointer',
-              fontWeight: 'bold',
-              whiteSpace: 'nowrap'
-            }}
-          >
-            👑 系統管理中心
-          </button>
-        )}
-
-        {adminRoles.map((role) => (
-          <button 
-            key={role.team_id}
-            onClick={() => setActiveTab(role.team_id)}
-            style={{ 
-              padding: '10px 20px', 
-              background: activeTab === role.team_id ? 'rgba(255,255,255,0.1)' : 'transparent',
-              border: 'none',
-              borderBottom: activeTab === role.team_id ? '2px solid var(--primary-color)' : '2px solid transparent',
-              color: activeTab === role.team_id ? '#fff' : '#888',
-              cursor: 'pointer',
-              fontWeight: 'bold',
-              whiteSpace: 'nowrap'
-            }}
-          >
-            🏓 {role.teams?.name}
-          </button>
-        ))}
-      </div>
-
       {/* 內容區域 */}
-      <div className="glass-panel" style={{ padding: '32px', marginTop: '20px' }}>
+      <div className="glass-panel" style={{ padding: '32px' }}>
         
         {/* 超級管理員頁面 */}
         {activeTab === 'superadmin' && isSuperAdmin && (

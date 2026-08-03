@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../config/supabaseClient';
 import Swal from 'sweetalert2';
+import { confirmAction, showSuccess, showError } from '../utils/swalHelper';
 import * as XLSX from 'xlsx';
 
 const StudentList = ({ teamId }) => {
@@ -64,17 +65,9 @@ const StudentList = ({ teamId }) => {
   };
 
   const handleDelete = async (id, name) => {
-    const result = await Swal.fire({
+    const result = await confirmAction({
       title: '確定要刪除嗎？',
-      text: `確定要刪除球員「${name}」嗎？這個操作無法復原。`,
-      icon: 'warning',
-      showCancelButton: true,
-      confirmButtonColor: '#ff6b6b',
-      cancelButtonColor: '#6c757d',
-      confirmButtonText: '是的，刪除！',
-      cancelButtonText: '取消',
-      background: '#1a1a2e',
-      color: '#fff'
+      text: `確定要刪除球員「${name}」嗎？這個操作無法復原。`
     });
 
     if (!result.isConfirmed) return;
@@ -85,9 +78,35 @@ const StudentList = ({ teamId }) => {
       .eq('id', id);
 
     if (error) {
-      Swal.fire({ title: '刪除失敗', text: error.message, icon: 'error', background: '#1a1a2e', color: '#fff' });
+      showError('刪除失敗', error.message);
     } else {
       setStudents(students.filter(s => s.id !== id));
+    }
+  };
+
+  const handleToggleActive = async (student) => {
+    const isCurrentlyActive = student.is_active !== false;
+    const actionText = isCurrentlyActive ? '離隊/畢業' : '恢復在隊';
+    
+    const result = await confirmAction({
+      title: `確定要將狀態改為「${actionText}」嗎？`,
+      text: `將 ${student.name} 的狀態標記為${actionText}。`,
+      confirmButtonText: '確定更改',
+      confirmButtonColor: isCurrentlyActive ? '#ff6b6b' : '#4ade80'
+    });
+
+    if (!result.isConfirmed) return;
+
+    const { error } = await supabase
+      .from('students')
+      .update({ is_active: !isCurrentlyActive })
+      .eq('id', student.id);
+
+    if (error) {
+      showError('更新失敗', error.message);
+    } else {
+      setStudents(students.map(s => s.id === student.id ? { ...s, is_active: !isCurrentlyActive } : s));
+      showSuccess('狀態已更新');
     }
   };
 
@@ -124,17 +143,11 @@ const StudentList = ({ teamId }) => {
   };
 
   const handleBulkPromote = async () => {
-    const result = await Swal.fire({
+    const result = await confirmAction({
       title: '確定要執行「一鍵升級」嗎？',
       text: '系統會自動將所有一到五年級的學生升一級，六年級的學生會被標記為「畢業」。(請確認目前名單正確無誤再執行)',
-      icon: 'warning',
-      showCancelButton: true,
       confirmButtonColor: '#4ade80',
-      cancelButtonColor: '#6c757d',
-      confirmButtonText: '是的，執行升級！',
-      cancelButtonText: '取消',
-      background: '#1a1a2e',
-      color: '#fff'
+      confirmButtonText: '是的，執行升級！'
     });
 
     if (!result.isConfirmed) return;
@@ -167,17 +180,16 @@ const StudentList = ({ teamId }) => {
       .select();
 
     if (error) {
-      Swal.fire({ title: '升級失敗', text: error.message, icon: 'error', background: '#1a1a2e', color: '#fff' });
+      showError('升級失敗', error.message);
     } else {
-      Swal.fire({ title: '完成！', text: '一鍵升級已成功執行。', icon: 'success', background: '#1a1a2e', color: '#fff' });
-      setStudents(updatedStudents);
+      showSuccess('完成！', '一鍵升級已成功執行。');
+      fetchStudents();
     }
     
     setLoading(false);
   };
 
   const handleExportExcel = () => {
-    // 準備匯出的資料，將英文狀態轉換為中文
     const exportData = students.map(student => ({
       '姓名': student.name,
       '年級': student.grade || '',
@@ -187,12 +199,10 @@ const StudentList = ({ teamId }) => {
       '備註': student.note || ''
     }));
 
-    // 建立 Worksheet 與 Workbook
     const worksheet = XLSX.utils.json_to_sheet(exportData);
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, '球員名冊');
 
-    // 產生檔案並下載
     const dateStr = new Date().toISOString().split('T')[0];
     XLSX.writeFile(workbook, `球員名冊_${dateStr}.xlsx`);
   };
@@ -221,21 +231,23 @@ const StudentList = ({ teamId }) => {
           <button 
             onClick={() => setShowInactive(!showInactive)}
             style={{ 
-              background: 'transparent', 
-              color: showInactive ? 'var(--primary-color)' : '#aaa', 
-              border: `1px solid ${showInactive ? 'var(--primary-color)' : '#666'}`, 
+              background: showInactive ? 'var(--primary-color)' : 'rgba(255,255,255,0.05)', 
+              color: showInactive ? '#fff' : '#ccc', 
+              border: `1px solid ${showInactive ? 'var(--primary-color)' : 'rgba(255,255,255,0.1)'}`, 
               padding: '8px 16px', 
               borderRadius: '8px', 
               cursor: 'pointer',
+              fontWeight: 'bold',
+              transition: 'all 0.3s ease'
             }}
           >
-            {showInactive ? '隱藏離隊球員' : '顯示歷史球員'}
+            {showInactive ? '隱藏歷史球員' : '顯示歷史球員'}
           </button>
           <button 
             onClick={handleExportExcel}
             disabled={students.length === 0}
             style={{ 
-              background: '#217346', // Excel 的代表色
+              background: '#217346', 
               color: '#fff', 
               border: 'none', 
               padding: '8px 16px', 
@@ -286,6 +298,7 @@ const StudentList = ({ teamId }) => {
                 style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid var(--glass-border)', background: 'rgba(255,255,255,0.1)', color: 'white' }}
               />
             </div>
+            {/* 班級欄位暫時隱藏
             <div style={{ flex: 1, minWidth: '100px' }}>
               <label style={{ display: 'block', marginBottom: '5px', fontSize: '0.9rem' }}>班級</label>
               <input 
@@ -296,6 +309,7 @@ const StudentList = ({ teamId }) => {
                 style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid var(--glass-border)', background: 'rgba(255,255,255,0.1)', color: 'white' }}
               />
             </div>
+            */}
             <div style={{ flex: 1, minWidth: '150px' }}>
               <label style={{ display: 'block', marginBottom: '5px', fontSize: '0.9rem' }}>備註</label>
               <input 
@@ -340,7 +354,7 @@ const StudentList = ({ teamId }) => {
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '20px' }}>
           {students
-            .filter(student => showInactive || student.is_active !== false)
+            .filter(student => showInactive ? student.is_active === false : student.is_active !== false)
             .filter(student => student.name.toLowerCase().includes(searchQuery.toLowerCase()))
             .map(student => (
             <div 
@@ -371,10 +385,12 @@ const StudentList = ({ teamId }) => {
                       <label style={{ display: 'block', fontSize: '0.8rem', color: '#888', marginBottom: '4px' }}>年級</label>
                       <input type="text" value={editForm.grade || ''} placeholder="例如: 三" onChange={e => setEditForm({...editForm, grade: e.target.value})} style={{ width: '100%', padding: '8px', borderRadius: '6px', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', color: 'white' }} />
                     </div>
+                    {/* 班級欄位暫時隱藏
                     <div style={{ flex: 1 }}>
                       <label style={{ display: 'block', fontSize: '0.8rem', color: '#888', marginBottom: '4px' }}>班級</label>
                       <input type="text" value={editForm.class_name || ''} placeholder="例如: 忠" onChange={e => setEditForm({...editForm, class_name: e.target.value})} style={{ width: '100%', padding: '8px', borderRadius: '6px', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', color: 'white' }} />
                     </div>
+                    */}
                   </div>
                   <div>
                     <label style={{ display: 'block', fontSize: '0.8rem', color: '#888', marginBottom: '4px' }}>備註</label>
@@ -402,9 +418,9 @@ const StudentList = ({ teamId }) => {
                     <h3 style={{ margin: 0, fontSize: '1.3rem', color: 'white' }}>{student.name}</h3>
                     <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
                       {student.is_active === false ? (
-                        <span style={{ background: 'rgba(255, 107, 107, 0.1)', border: '1px solid rgba(255, 107, 107, 0.3)', color: '#ff6b6b', padding: '4px 8px', borderRadius: '6px', fontSize: '0.75rem', fontWeight: 'bold' }}>離隊/畢業</span>
+                        <span onClick={() => handleToggleActive(student)} style={{ background: 'rgba(255, 107, 107, 0.1)', border: '1px solid rgba(255, 107, 107, 0.3)', color: '#ff6b6b', padding: '4px 8px', borderRadius: '6px', fontSize: '0.75rem', fontWeight: 'bold', cursor: 'pointer' }}>離隊/畢業</span>
                       ) : (
-                        <span style={{ background: 'rgba(74, 222, 128, 0.1)', border: '1px solid rgba(74, 222, 128, 0.3)', color: '#4ade80', padding: '4px 8px', borderRadius: '6px', fontSize: '0.75rem', fontWeight: 'bold' }}>在隊</span>
+                        <span onClick={() => handleToggleActive(student)} style={{ background: 'rgba(74, 222, 128, 0.1)', border: '1px solid rgba(74, 222, 128, 0.3)', color: '#4ade80', padding: '4px 8px', borderRadius: '6px', fontSize: '0.75rem', fontWeight: 'bold', cursor: 'pointer' }}>在隊</span>
                       )}
                       {student.is_officer && (
                         <span style={{ background: 'rgba(251, 188, 5, 0.1)', border: '1px solid rgba(251, 188, 5, 0.3)', color: '#fbbc05', padding: '4px 8px', borderRadius: '6px', fontSize: '0.75rem', fontWeight: 'bold' }}>幹部</span>
@@ -413,12 +429,22 @@ const StudentList = ({ teamId }) => {
                   </div>
                   
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', flexGrow: 1 }}>
+                    {/* 班級暫時隱藏
                     <div style={{ display: 'flex', alignItems: 'center' }}>
                       <span style={{ color: '#888', fontSize: '0.85rem', width: '50px' }}>班級</span>
                       <span style={{ color: '#e2e8f0', fontSize: '0.95rem' }}>
                         {student.grade ? `${student.grade}年` : ''}{student.class_name ? `${student.class_name}班` : (student.grade ? '' : '-')}
                       </span>
                     </div>
+                    */}
+                    {student.grade && (
+                      <div style={{ display: 'flex', alignItems: 'center' }}>
+                        <span style={{ color: '#888', fontSize: '0.85rem', width: '50px' }}>年級</span>
+                        <span style={{ color: '#e2e8f0', fontSize: '0.95rem' }}>
+                          {student.grade}年
+                        </span>
+                      </div>
+                    )}
                     <div style={{ display: 'flex', alignItems: 'flex-start' }}>
                       <span style={{ color: '#888', fontSize: '0.85rem', width: '50px', marginTop: '2px' }}>備註</span>
                       <span style={{ color: '#cbd5e1', fontSize: '0.9rem', lineHeight: '1.4' }}>

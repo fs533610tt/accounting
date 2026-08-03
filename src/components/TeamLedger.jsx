@@ -89,19 +89,34 @@ const TeamLedger = ({ teamId }) => {
     is_settled: false
   });
   const [selectedFiles, setSelectedFiles] = useState([]);
+  const [selectedMonth, setSelectedMonth] = useState(''); // 月份篩選
 
   useEffect(() => {
     fetchTransactions();
-  }, [teamId]);
+  }, [teamId, selectedMonth]);
 
   const fetchTransactions = async () => {
     setLoading(true);
-    const { data, error } = await supabase
+    let query = supabase
       .from('team_transactions')
       .select('*')
       .eq('team_id', teamId)
       .order('transaction_date', { ascending: false })
       .order('created_at', { ascending: false });
+
+    // 加入月份篩選條件
+    if (selectedMonth) {
+      const startDate = `${selectedMonth}-01`;
+      // 計算下個月的第一天
+      const [year, month] = selectedMonth.split('-');
+      const nextMonth = month === '12' ? '01' : String(Number(month) + 1).padStart(2, '0');
+      const nextYear = month === '12' ? String(Number(year) + 1) : year;
+      const endDate = `${nextYear}-${nextMonth}-01`;
+      
+      query = query.gte('transaction_date', startDate).lt('transaction_date', endDate);
+    }
+
+    const { data, error } = await query;
 
     if (error) {
       console.error('Error fetching transactions:', error);
@@ -242,9 +257,24 @@ const TeamLedger = ({ teamId }) => {
         </div>
       </div>
 
-      <div className="flex-mobile-column" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-        <h3 style={{ margin: 0 }}>交易明細</h3>
-        <button className="btn-primary" onClick={() => setShowAddForm(!showAddForm)} style={{ background: showAddForm ? 'transparent' : 'var(--primary-color)', border: showAddForm ? '1px solid #ccc' : 'none' }}>
+      <div className="flex-mobile-column" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', gap: '10px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '15px', flexWrap: 'wrap' }}>
+          <h3 style={{ margin: 0 }}>交易明細</h3>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <input 
+              type="month" 
+              value={selectedMonth}
+              onChange={(e) => setSelectedMonth(e.target.value)}
+              style={{ padding: '6px 12px', borderRadius: '6px', border: '1px solid var(--glass-border)', background: 'rgba(255,255,255,0.1)', color: 'white', colorScheme: 'dark' }}
+            />
+            {selectedMonth && (
+              <button onClick={() => setSelectedMonth('')} style={{ background: 'transparent', border: '1px solid #666', color: '#ccc', cursor: 'pointer', fontSize: '0.8rem', padding: '4px 8px', borderRadius: '4px' }}>
+                清除
+              </button>
+            )}
+          </div>
+        </div>
+        <button className="btn-primary" onClick={() => setShowAddForm(!showAddForm)} style={{ background: showAddForm ? 'transparent' : 'var(--primary-color)', border: showAddForm ? '1px solid #ccc' : 'none', minWidth: '120px' }}>
           {showAddForm ? '取消新增' : '+ 記一筆'}
         </button>
       </div>
@@ -293,9 +323,11 @@ const TeamLedger = ({ teamId }) => {
                 style={{ width: '100%', padding: '7px', borderRadius: '8px', border: '1px solid var(--glass-border)', background: 'rgba(255,255,255,0.1)', color: 'white' }} 
               />
             </div>
-            <button type="submit" className="btn-primary" style={{ padding: '10px 20px', height: '42px', minWidth: '100px' }} disabled={loading}>
-              儲存
-            </button>
+            <div style={{ flexBasis: '100%', marginTop: '10px' }}>
+              <button type="submit" className="btn-primary" style={{ width: '100%', padding: '12px 20px', height: '48px', fontSize: '1.1rem', fontWeight: 'bold' }} disabled={loading}>
+                {loading ? '儲存中...' : '儲存交易'}
+              </button>
+            </div>
           </form>
         </div>
       )}
