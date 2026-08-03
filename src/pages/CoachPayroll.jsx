@@ -183,6 +183,13 @@ const CoachPayroll = ({ teamId, forcedTab, hideSubTabs }) => {
     Swal.fire({ title: '已更新時薪', icon: 'success', toast: true, position: 'top-end', showConfirmButton: false, timer: 2000, background: '#1a1a2e', color: '#fff' });
   };
 
+  const updateCoachName = async (id, newName) => {
+    if (!newName.trim()) return;
+    await supabase.from('coaches').update({ name: newName.trim() }).eq('id', id);
+    fetchCoaches();
+    Swal.fire({ title: '已更新教練名稱', icon: 'success', toast: true, position: 'top-end', showConfirmButton: false, timer: 2000, background: '#1a1a2e', color: '#fff' });
+  };
+
   const handleAddAttendance = async (e) => {
     e.preventDefault();
     if (!newAttendance.coach_id || newAttendance.hours_worked <= 0) return;
@@ -476,7 +483,26 @@ const CoachPayroll = ({ teamId, forcedTab, hideSubTabs }) => {
                 >
                   {coach.is_active ? '在職中' : '已離職'}
                 </button>
-                <h3 style={{ margin: '0 0 10px 0', color: coach.is_active ? '#fff' : '#666' }}>{coach.name}</h3>
+                <input 
+                  type="text"
+                  defaultValue={coach.name}
+                  onBlur={(e) => {
+                    if (e.target.value !== coach.name) {
+                      updateCoachName(coach.id, e.target.value);
+                    }
+                  }}
+                  style={{ 
+                    margin: '0 0 10px 0', 
+                    color: coach.is_active ? '#fff' : '#666',
+                    background: 'transparent',
+                    border: '1px solid transparent',
+                    borderBottom: '1px solid rgba(255,255,255,0.2)',
+                    fontSize: '1.2rem',
+                    fontWeight: 'bold',
+                    padding: '4px',
+                    width: 'calc(100% - 70px)'
+                  }} 
+                />
                 
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px', opacity: coach.is_active ? 1 : 0.5 }}>
                   <span style={{ fontSize: '0.9rem', color: '#aaa' }}>預設時薪: $</span>

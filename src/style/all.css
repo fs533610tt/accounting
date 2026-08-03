@@ -166,17 +166,18 @@ body {
     padding: 10px !important;
   }
 
-  /* 優化操作按鈕容器 (讓按鈕整齊排列) */
+  /* 優化操作按鈕容器 (改為雙排網格排列，節省垂直空間) */
   .action-buttons-container {
-    display: flex;
-    flex-direction: column;
+    display: grid !important;
+    grid-template-columns: 1fr 1fr;
     width: 100%;
-    gap: 12px !important;
+    gap: 10px !important;
   }
   .action-buttons-container > button {
     width: 100%;
     margin: 0 !important;
-    padding: 12px !important;
+    padding: 10px 8px !important;
+    font-size: 0.9rem !important; /* 文字縮小以適應雙排 */
   }
 
   /* Mobile Card Table 樣式 (將傳統表格轉為卡片式) */

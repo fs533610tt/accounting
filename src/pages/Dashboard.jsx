@@ -127,11 +127,11 @@ const Dashboard = () => {
                 
                 {role.role !== 'coach' && (
                   <button 
-                    onClick={() => handleSubTabChange(role.team_id, 'roster')}
+                    onClick={() => handleSubTabChange(role.team_id, 'payroll')}
                     style={{
                       padding: '8px 16px',
-                      background: currentSubTab === 'roster' ? 'var(--primary-color)' : 'transparent',
-                      color: currentSubTab === 'roster' ? '#fff' : '#aaa',
+                      background: currentSubTab === 'payroll' ? 'var(--primary-color)' : 'transparent',
+                      color: currentSubTab === 'payroll' ? '#fff' : '#aaa',
                       border: 'none',
                       borderRadius: '6px',
                       cursor: 'pointer',
@@ -176,7 +176,7 @@ const Dashboard = () => {
               )}
 
               {currentSubTab === 'payroll' && (
-                <CoachPayroll teamId={role.team_id} forcedTab="payroll" />
+                <CoachPayroll teamId={role.team_id} forcedTab="roster" />
               )}
 
               {currentSubTab === 'settings' && (
