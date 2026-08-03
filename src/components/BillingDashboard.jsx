@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../config/supabaseClient';
 import BillingDetail from './BillingDetail';
 import TeamLedger from './TeamLedger';
+import CoachPayrollTab from './CoachPayrollTab';
+import FinancialOverview from './FinancialOverview';
 
 const BillingDashboard = ({ teamId }) => {
   const [cycles, setCycles] = useState([]);
@@ -110,13 +112,14 @@ const BillingDashboard = ({ teamId }) => {
     <div style={{ marginTop: '20px' }}>
       
       {/* 切換頁籤 */}
-      <div style={{ display: 'flex', gap: '10px', marginBottom: '20px', borderBottom: '1px solid var(--border)' }}>
+      <div className="hide-scrollbar" style={{ display: 'flex', gap: '10px', marginBottom: '20px', borderBottom: '1px solid var(--border)', overflowX: 'auto', whiteSpace: 'nowrap', flexWrap: 'nowrap', WebkitOverflowScrolling: 'touch', maxWidth: '100%' }}>
         <button 
           onClick={() => setActiveTab('tuition')}
           style={{ 
             background: 'none', border: 'none', color: activeTab === 'tuition' ? 'var(--primary-color)' : '#aaa', 
-            padding: '10px 20px', fontSize: '1.1rem', fontWeight: 'bold', cursor: 'pointer',
-            borderBottom: activeTab === 'tuition' ? '3px solid var(--primary-color)' : '3px solid transparent'
+            padding: '10px 20px', fontSize: '1rem', fontWeight: 'bold', cursor: 'pointer',
+            borderBottom: activeTab === 'tuition' ? '3px solid var(--primary-color)' : '3px solid transparent',
+            flexShrink: 0
           }}
         >
           💰 學費帳單
@@ -125,16 +128,43 @@ const BillingDashboard = ({ teamId }) => {
           onClick={() => setActiveTab('ledger')}
           style={{ 
             background: 'none', border: 'none', color: activeTab === 'ledger' ? '#fbbc05' : '#aaa', 
-            padding: '10px 20px', fontSize: '1.1rem', fontWeight: 'bold', cursor: 'pointer',
-            borderBottom: activeTab === 'ledger' ? '3px solid #fbbc05' : '3px solid transparent'
+            padding: '10px 20px', fontSize: '1rem', fontWeight: 'bold', cursor: 'pointer',
+            borderBottom: activeTab === 'ledger' ? '3px solid #fbbc05' : '3px solid transparent',
+            flexShrink: 0
           }}
         >
           📓 雜支收支簿
+        </button>
+        <button 
+          onClick={() => setActiveTab('payroll')}
+          style={{ 
+            background: 'none', border: 'none', color: activeTab === 'payroll' ? '#4ade80' : '#aaa', 
+            padding: '10px 20px', fontSize: '1rem', fontWeight: 'bold', cursor: 'pointer',
+            borderBottom: activeTab === 'payroll' ? '3px solid #4ade80' : '3px solid transparent',
+            flexShrink: 0
+          }}
+        >
+          💸 教練發薪
+        </button>
+        <button 
+          onClick={() => setActiveTab('overview')}
+          style={{ 
+            background: 'none', border: 'none', color: activeTab === 'overview' ? '#a78bfa' : '#aaa', 
+            padding: '10px 20px', fontSize: '1rem', fontWeight: 'bold', cursor: 'pointer',
+            borderBottom: activeTab === 'overview' ? '3px solid #a78bfa' : '3px solid transparent',
+            flexShrink: 0
+          }}
+        >
+          📊 月結總損益
         </button>
       </div>
 
       {activeTab === 'ledger' ? (
         <TeamLedger teamId={teamId} />
+      ) : activeTab === 'payroll' ? (
+        <CoachPayrollTab teamId={teamId} />
+      ) : activeTab === 'overview' ? (
+        <FinancialOverview teamId={teamId} />
       ) : (
         <>
           <div className="flex-mobile-column" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', gap: '15px' }}>

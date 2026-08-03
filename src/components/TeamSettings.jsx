@@ -114,9 +114,7 @@ const TeamSettings = ({ teamId }) => {
   };
 
   return (
-    <div style={{ marginTop: '30px' }}>
-      <h2 style={{ marginBottom: '20px' }}>球隊權限設定</h2>
-      
+    <div style={{ marginTop: '10px' }}>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '20px' }}>
         
         {/* 目前管理員區塊 */}

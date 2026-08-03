@@ -3,19 +3,20 @@ import { supabase } from '../config/supabaseClient';
 import { useAuth } from '../contexts/AuthContext';
 import Swal from 'sweetalert2';
 
-const CoachPayroll = ({ teamId }) => {
-  const { userRoles } = useAuth();
+const CoachPayroll = ({ teamId, forcedTab, hideSubTabs }) => {
+  const { userRoles, session } = useAuth();
+  const currentUserId = session?.user?.id;
   
   const currentRole = useMemo(() => {
     if (!userRoles) return null;
     const roleObj = userRoles.find(r => r.team_id === teamId);
-    if (!roleObj) return 'superadmin'; // superadmin has no specific team_id row, or it might be admin
+    if (!roleObj) return 'superadmin';
     return roleObj.role;
   }, [userRoles, teamId]);
 
   const isRegularCoach = currentRole === 'coach';
 
-  const [activeTab, setActiveTab] = useState('attendance');
+  const [activeTab, setActiveTab] = useState(forcedTab || (isRegularCoach ? 'attendance' : 'roster'));
   const [coaches, setCoaches] = useState([]);
   const [attendance, setAttendance] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -23,6 +24,11 @@ const CoachPayroll = ({ teamId }) => {
   // Roster state
   const [showAddCoach, setShowAddCoach] = useState(false);
   const [newCoach, setNewCoach] = useState({ name: '', default_hourly_rate: 500 });
+  const [teamMembers, setTeamMembers] = useState([]);
+  const [suggestions, setSuggestions] = useState([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [selectedEmail, setSelectedEmail] = useState('');
+  const [selectedUserId, setSelectedUserId] = useState(null);
 
   // Attendance state
   const [newAttendance, setNewAttendance] = useState({
@@ -32,22 +38,24 @@ const CoachPayroll = ({ teamId }) => {
     hourly_rate: 0
   });
 
-  // Payroll state
-  const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().substring(0, 7));
+  // Admin Search State
+  const [searchMonth, setSearchMonth] = useState(new Date().toISOString().substring(0, 7));
+  const [searchCoachId, setSearchCoachId] = useState('all');
 
   useEffect(() => {
     if (teamId) {
       fetchCoaches();
+      fetchTeamMembers();
     }
   }, [teamId]);
 
   useEffect(() => {
     if (teamId && activeTab === 'attendance') {
-      fetchAttendance();
-    } else if (teamId && activeTab === 'payroll') {
-      fetchAttendanceForMonth(selectedMonth);
+      fetchMyAttendance();
+    } else if (teamId && activeTab === 'attendance_search') {
+      fetchAllAttendance(searchMonth, searchCoachId);
     }
-  }, [teamId, activeTab, selectedMonth]);
+  }, [teamId, activeTab, searchMonth, searchCoachId, currentUserId]);
 
   const fetchCoaches = async () => {
     const { data, error } = await supabase
@@ -59,22 +67,47 @@ const CoachPayroll = ({ teamId }) => {
     
     if (!error && data) {
       setCoaches(data);
-      if (data.length > 0 && !newAttendance.coach_id) {
+      // 自動選擇自己
+      const myCoachRecord = data.find(c => c.user_id === currentUserId);
+      if (myCoachRecord && !newAttendance.coach_id) {
         setNewAttendance(prev => ({ 
           ...prev, 
-          coach_id: data[0].id, 
-          hourly_rate: data[0].default_hourly_rate 
+          coach_id: myCoachRecord.id, 
+          hourly_rate: myCoachRecord.default_hourly_rate 
         }));
       }
     }
   };
 
-  const fetchAttendance = async () => {
+  const fetchTeamMembers = async () => {
+    const { data } = await supabase.rpc('get_team_members', { target_team_id: teamId });
+    if (data) setTeamMembers(data);
+  };
+
+  const handleEmailChange = (e) => {
+    const val = e.target.value;
+    setSelectedEmail(val);
+    setSelectedUserId(null);
+
+    if (val.length >= 2) {
+      const filtered = teamMembers.filter(m => m.email.toLowerCase().includes(val.toLowerCase()));
+      setSuggestions(filtered);
+      setShowSuggestions(true);
+    } else {
+      setSuggestions([]);
+      setShowSuggestions(false);
+    }
+  };
+
+  const fetchMyAttendance = async () => {
     setLoading(true);
+    if (!currentUserId) return;
+    
     const { data, error } = await supabase
       .from('coach_attendance')
-      .select('*, coaches(name)')
+      .select('*, coaches!inner(name, user_id)')
       .eq('team_id', teamId)
+      .eq('coaches.user_id', currentUserId)
       .order('work_date', { ascending: false })
       .limit(50);
     
@@ -84,7 +117,7 @@ const CoachPayroll = ({ teamId }) => {
     setLoading(false);
   };
 
-  const fetchAttendanceForMonth = async (month) => {
+  const fetchAllAttendance = async (month, cId) => {
     setLoading(true);
     const startDate = `${month}-01`;
     const [year, m] = month.split('-');
@@ -92,7 +125,7 @@ const CoachPayroll = ({ teamId }) => {
     const nextYear = m === '12' ? String(Number(year) + 1) : year;
     const endDate = `${nextYear}-${nextMonth}-01`;
 
-    const { data, error } = await supabase
+    let query = supabase
       .from('coach_attendance')
       .select('*, coaches(name)')
       .eq('team_id', teamId)
@@ -100,28 +133,38 @@ const CoachPayroll = ({ teamId }) => {
       .lt('work_date', endDate)
       .order('work_date', { ascending: false });
     
+    if (cId !== 'all') {
+      query = query.eq('coach_id', cId);
+    }
+
+    const { data, error } = await query;
     if (!error && data) {
       setAttendance(data);
     }
     setLoading(false);
   };
 
-  // --- Handlers for Coaches ---
+  // --- Handlers ---
   const handleAddCoach = async (e) => {
     e.preventDefault();
-    if (!newCoach.name.trim()) return;
-
+    if (!newCoach.name.trim() || !selectedUserId) {
+      Swal.fire({ title: '錯誤', text: '請輸入並選擇教練信箱', icon: 'error', background: '#1a1a2e', color: '#fff' });
+      return;
+    }
     setLoading(true);
-    const { error } = await supabase.from('coaches').insert([{
+    const { error } = await supabase.from('coaches').insert({
       team_id: teamId,
+      user_id: selectedUserId,
       name: newCoach.name,
       default_hourly_rate: newCoach.default_hourly_rate
-    }]);
+    });
 
     if (error) {
       Swal.fire({ title: '錯誤', text: error.message, icon: 'error', background: '#1a1a2e', color: '#fff' });
     } else {
       setNewCoach({ name: '', default_hourly_rate: 500 });
+      setSelectedEmail('');
+      setSelectedUserId(null);
       setShowAddCoach(false);
       fetchCoaches();
       Swal.fire({ title: '新增成功', icon: 'success', toast: true, position: 'top-end', showConfirmButton: false, timer: 3000, background: '#1a1a2e', color: '#fff' });
@@ -140,7 +183,6 @@ const CoachPayroll = ({ teamId }) => {
     Swal.fire({ title: '已更新時薪', icon: 'success', toast: true, position: 'top-end', showConfirmButton: false, timer: 2000, background: '#1a1a2e', color: '#fff' });
   };
 
-  // --- Handlers for Attendance ---
   const handleAddAttendance = async (e) => {
     e.preventDefault();
     if (!newAttendance.coach_id || newAttendance.hours_worked <= 0) return;
@@ -159,7 +201,7 @@ const CoachPayroll = ({ teamId }) => {
     if (error) {
       Swal.fire({ title: '錯誤', text: error.message, icon: 'error', background: '#1a1a2e', color: '#fff' });
     } else {
-      fetchAttendance();
+      if (activeTab === 'attendance') fetchMyAttendance();
       Swal.fire({ title: '打卡成功', icon: 'success', toast: true, position: 'top-end', showConfirmButton: false, timer: 3000, background: '#1a1a2e', color: '#fff' });
     }
     setLoading(false);
@@ -181,97 +223,58 @@ const CoachPayroll = ({ teamId }) => {
 
     if (result.isConfirmed) {
       await supabase.from('coach_attendance').delete().eq('id', id);
-      if (activeTab === 'attendance') fetchAttendance();
-      else fetchAttendanceForMonth(selectedMonth);
+      if (activeTab === 'attendance') fetchMyAttendance();
+      else fetchAllAttendance(searchMonth, searchCoachId);
     }
   };
-
-  // --- Handlers for Payroll ---
-  const handlePayCoach = async (coachId, coachName, amount, recordIds) => {
-    const result = await Swal.fire({
-      title: '發放薪資確認',
-      html: `確定要結算 <b>${coachName}</b> 的薪資共 <b>$${amount}</b> 嗎？<br/><br/>這將標記為已發放，並自動記錄到「球隊記帳本」支出中。`,
-      icon: 'question',
-      showCancelButton: true,
-      confirmButtonColor: '#4ade80',
-      cancelButtonColor: '#555',
-      confirmButtonText: '確定發放',
-      cancelButtonText: '取消',
-      background: '#1a1a2e',
-      color: '#fff'
-    });
-
-    if (result.isConfirmed) {
-      setLoading(true);
-      // 1. 標記為已發放
-      const { error: updateError } = await supabase
-        .from('coach_attendance')
-        .update({ is_paid: true })
-        .in('id', recordIds);
-      
-      if (updateError) {
-        Swal.fire({ title: '錯誤', text: updateError.message, icon: 'error', background: '#1a1a2e', color: '#fff' });
-        setLoading(false);
-        return;
-      }
-
-      // 2. 新增一筆支出到 team_transactions
-      const description = `${selectedMonth} 月份 ${coachName} 教練薪資結算`;
-      await supabase.from('team_transactions').insert([{
-        team_id: teamId,
-        transaction_date: new Date().toISOString().split('T')[0],
-        type: 'expense',
-        category: '教練薪資',
-        amount: amount,
-        description: description,
-        is_settled: true // 薪資通常直接發放結清
-      }]);
-
-      fetchAttendanceForMonth(selectedMonth);
-      Swal.fire({ title: '發放成功！', icon: 'success', background: '#1a1a2e', color: '#fff' });
-      setLoading(false);
-    }
-  };
-
-  // 分組計算薪水 (Payroll Tab)
-  const payrollSummary = attendance.reduce((acc, curr) => {
-    if (!acc[curr.coach_id]) {
-      acc[curr.coach_id] = {
-        name: curr.coaches?.name || '未知教練',
-        totalHours: 0,
-        totalPay: 0,
-        pendingPay: 0,
-        pendingRecords: []
-      };
-    }
-    acc[curr.coach_id].totalHours += Number(curr.hours_worked);
-    acc[curr.coach_id].totalPay += Number(curr.total_pay);
-    
-    if (!curr.is_paid) {
-      acc[curr.coach_id].pendingPay += Number(curr.total_pay);
-      acc[curr.coach_id].pendingRecords.push(curr.id);
-    }
-    return acc;
-  }, {});
 
   return (
     <div className="coach-payroll-container">
-      <div className="tabs" style={{ display: 'flex', gap: '10px', marginBottom: '20px', flexWrap: 'wrap' }}>
-        <button className={activeTab === 'attendance' ? 'btn-primary' : ''} onClick={() => setActiveTab('attendance')} style={{ padding: '8px 16px', background: activeTab === 'attendance' ? '' : 'transparent', border: activeTab === 'attendance' ? 'none' : '1px solid #555', color: activeTab === 'attendance' ? '#fff' : '#aaa' }}>📝 簽到登記</button>
+      {!hideSubTabs && (
+        <div className="scrollable-tabs">
         {!isRegularCoach && (
           <>
-            <button className={activeTab === 'payroll' ? 'btn-primary' : ''} onClick={() => setActiveTab('payroll')} style={{ padding: '8px 16px', background: activeTab === 'payroll' ? '' : 'transparent', border: activeTab === 'payroll' ? 'none' : '1px solid #555', color: activeTab === 'payroll' ? '#fff' : '#aaa' }}>💰 月結發薪</button>
-            <button className={activeTab === 'roster' ? 'btn-primary' : ''} onClick={() => setActiveTab('roster')} style={{ padding: '8px 16px', background: activeTab === 'roster' ? '' : 'transparent', border: activeTab === 'roster' ? 'none' : '1px solid #555', color: activeTab === 'roster' ? '#fff' : '#aaa' }}>👨‍🏫 教練名冊</button>
+            <button 
+              onClick={() => setActiveTab('roster')} 
+              style={{ 
+                padding: '8px 16px', 
+                background: activeTab === 'roster' ? 'var(--primary-color)' : 'transparent', 
+                border: 'none', 
+                borderRadius: '6px',
+                color: activeTab === 'roster' ? '#fff' : '#aaa',
+                cursor: 'pointer',
+                fontWeight: 'bold',
+                flexShrink: 0
+              }}
+            >
+              👨‍🏫 教練名冊
+            </button>
+            <button 
+              onClick={() => setActiveTab('attendance_search')} 
+              style={{ 
+                padding: '8px 16px', 
+                background: activeTab === 'attendance_search' ? 'var(--primary-color)' : 'transparent', 
+                border: 'none', 
+                borderRadius: '6px',
+                color: activeTab === 'attendance_search' ? '#fff' : '#aaa',
+                cursor: 'pointer',
+                fontWeight: 'bold',
+                flexShrink: 0
+              }}
+            >
+              📅 簽到紀錄查詢
+            </button>
           </>
         )}
       </div>
+      )}
 
       {activeTab === 'attendance' && (
         <div>
           <div className="glass-panel" style={{ padding: '20px', marginBottom: '20px' }}>
             <h3 style={{ marginTop: 0, color: 'var(--primary-color)' }}>新增簽到紀錄</h3>
-            {coaches.filter(c => c.is_active).length === 0 ? (
-              <p style={{ color: '#ff6b6b' }}>請先至「教練名冊」新增並啟用教練。</p>
+            {coaches.filter(c => c.is_active && c.user_id === currentUserId).length === 0 ? (
+              <p style={{ color: '#ff6b6b' }}>您目前不是此球隊的有效教練，無法打卡。</p>
             ) : (
               <form className="flex-mobile-column" onSubmit={handleAddAttendance} style={{ display: 'flex', gap: '15px', alignItems: 'flex-end', flexWrap: 'wrap' }}>
                 <div style={{ flex: 1, minWidth: '130px' }}>
@@ -289,8 +292,8 @@ const CoachPayroll = ({ teamId }) => {
                     }}
                     style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid var(--glass-border)', background: 'rgba(255,255,255,0.1)', color: 'white' }}
                   >
-                    {coaches.filter(c => c.is_active).map(c => (
-                      <option key={c.id} value={c.id} style={{ color: 'black' }}>{c.name}</option>
+                    {coaches.filter(c => c.is_active && c.user_id === currentUserId).map(c => (
+                      <option key={c.id} value={c.id} style={{ color: 'black' }}>{c.name} (您)</option>
                     ))}
                   </select>
                 </div>
@@ -311,125 +314,146 @@ const CoachPayroll = ({ teamId }) => {
             )}
           </div>
 
-          <div className="glass-panel" style={{ padding: '20px' }}>
-            <h3 style={{ marginTop: 0 }}>近期簽到紀錄 (最近50筆)</h3>
-            <div style={{ overflowX: 'auto' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '600px' }}>
-                <thead>
-                  <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.1)', textAlign: 'left' }}>
-                    <th style={{ padding: '12px', color: '#aaa', fontWeight: 'normal' }}>日期</th>
-                    <th style={{ padding: '12px', color: '#aaa', fontWeight: 'normal' }}>教練</th>
-                    <th style={{ padding: '12px', color: '#aaa', fontWeight: 'normal' }}>時數</th>
-                    <th style={{ padding: '12px', color: '#aaa', fontWeight: 'normal' }}>時薪</th>
-                    <th style={{ padding: '12px', color: '#aaa', fontWeight: 'normal' }}>總薪資</th>
-                    <th style={{ padding: '12px', color: '#aaa', fontWeight: 'normal' }}>狀態</th>
-                    <th style={{ padding: '12px', color: '#aaa', fontWeight: 'normal' }}>操作</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {attendance.map(record => (
-                    <tr key={record.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-                      <td style={{ padding: '12px' }}>{record.work_date}</td>
-                      <td style={{ padding: '12px', fontWeight: 'bold' }}>{record.coaches?.name}</td>
-                      <td style={{ padding: '12px' }}>{record.hours_worked} hr</td>
-                      <td style={{ padding: '12px', color: '#ccc' }}>${record.hourly_rate}</td>
-                      <td style={{ padding: '12px', color: '#4ade80' }}>${record.total_pay}</td>
-                      <td style={{ padding: '12px' }}>
-                        {record.is_paid ? <span style={{ color: '#aaa', fontSize: '0.8rem', border: '1px solid #555', padding: '2px 6px', borderRadius: '4px' }}>已結清</span> : <span style={{ color: '#fbbc05', fontSize: '0.8rem', border: '1px solid rgba(251,188,5,0.3)', background: 'rgba(251,188,5,0.1)', padding: '2px 6px', borderRadius: '4px' }}>未發放</span>}
-                      </td>
-                      <td style={{ padding: '12px' }}>
-                        {!record.is_paid && (
-                          <button onClick={() => deleteAttendance(record.id)} style={{ background: 'transparent', border: 'none', color: '#ff6b6b', cursor: 'pointer', fontSize: '1.2rem' }} title="刪除">🗑️</button>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                  {attendance.length === 0 && (
-                    <tr><td colSpan="7" style={{ padding: '20px', textAlign: 'center', color: '#aaa' }}>尚無簽到紀錄</td></tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
+          <div style={{ marginTop: '20px' }}>
+            <h3 style={{ marginTop: 0, marginBottom: '15px' }}>您的歷史簽到</h3>
+            {loading ? <div style={{ color: '#aaa', textAlign: 'center' }}>載入中...</div> : (
+              <div style={{ display: 'grid', gap: '15px', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))' }}>
+                {attendance.length === 0 && <div style={{ color: '#888', gridColumn: '1/-1' }}>尚無打卡紀錄</div>}
+                {attendance.map(record => (
+                  <div key={record.id} className="glass-panel" style={{ padding: '20px', position: 'relative' }}>
+                    <div style={{ color: '#aaa', fontSize: '0.9rem', marginBottom: '8px' }}>{record.work_date}</div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div style={{ fontSize: '1.2rem', fontWeight: 'bold' }}>{record.hours_worked} hr</div>
+                      <div style={{ color: '#4ade80', fontSize: '1.2rem', fontWeight: 'bold' }}>${record.total_pay}</div>
+                    </div>
+                    <div style={{ color: '#ccc', fontSize: '0.9rem', marginTop: '5px' }}>
+                      時薪: ${record.hourly_rate}
+                    </div>
+                    <div style={{ position: 'absolute', top: '20px', right: '20px' }}>
+                      {record.is_paid ? (
+                        <span style={{ color: '#aaa', fontSize: '0.8rem', border: '1px solid #555', padding: '2px 6px', borderRadius: '4px' }}>已結清</span>
+                      ) : (
+                        <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                          <span style={{ color: '#fbbc05', fontSize: '0.8rem', border: '1px solid rgba(251,188,5,0.3)', background: 'rgba(251,188,5,0.1)', padding: '2px 6px', borderRadius: '4px' }}>未發放</span>
+                          <button onClick={() => deleteAttendance(record.id)} style={{ background: 'none', border: 'none', color: '#ff6b6b', cursor: 'pointer' }}>🗑️</button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       )}
 
-      {activeTab === 'payroll' && (
+      {activeTab === 'attendance_search' && (
         <div className="glass-panel" style={{ padding: '20px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '10px' }}>
-            <h3 style={{ margin: 0, color: 'var(--primary-color)' }}>月結發薪總覽</h3>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <span style={{ color: '#aaa' }}>選擇月份：</span>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '15px', marginBottom: '20px' }}>
+            <h3 style={{ margin: 0, color: 'var(--primary-color)' }}>簽到紀錄查詢 (管理員專用)</h3>
+            <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
               <input 
                 type="month" 
-                value={selectedMonth}
-                onChange={(e) => setSelectedMonth(e.target.value)}
-                style={{ padding: '6px 12px', borderRadius: '6px', border: '1px solid var(--glass-border)', background: 'rgba(255,255,255,0.1)', color: 'white', colorScheme: 'dark' }}
+                value={searchMonth} 
+                onChange={e => setSearchMonth(e.target.value)}
+                style={{ padding: '8px 12px', borderRadius: '8px', border: '1px solid var(--glass-border)', background: 'rgba(255,255,255,0.1)', color: '#fff' }}
               />
+              <select 
+                value={searchCoachId} 
+                onChange={e => setSearchCoachId(e.target.value)}
+                style={{ padding: '8px 12px', borderRadius: '8px', border: '1px solid var(--glass-border)', background: 'rgba(255,255,255,0.1)', color: 'white' }}
+              >
+                <option value="all" style={{ color: 'black' }}>所有教練</option>
+                {coaches.map(c => (
+                  <option key={c.id} value={c.id} style={{ color: 'black' }}>{c.name}</option>
+                ))}
+              </select>
             </div>
           </div>
 
-          <div style={{ display: 'grid', gap: '15px', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))' }}>
-            {Object.keys(payrollSummary).length === 0 ? (
-              <div style={{ gridColumn: '1 / -1', textAlign: 'center', padding: '40px', color: '#aaa' }}>
-                本月份尚無任何簽到紀錄。
-              </div>
-            ) : (
-              Object.values(payrollSummary).map((summary, idx) => (
-                <div key={idx} style={{ background: 'rgba(255,255,255,0.05)', padding: '20px', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.1)' }}>
-                  <h3 style={{ margin: '0 0 15px 0', fontSize: '1.2rem', display: 'flex', justifyContent: 'space-between' }}>
-                    {summary.name}
-                    {summary.pendingPay > 0 && <span style={{ fontSize: '0.8rem', background: '#fbbc05', color: '#000', padding: '2px 8px', borderRadius: '12px' }}>待發放</span>}
-                  </h3>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', color: '#ccc' }}>
-                    <span>本月總時數</span>
-                    <span>{summary.totalHours} hr</span>
+          {loading ? <div style={{ color: '#aaa', textAlign: 'center' }}>載入中...</div> : (
+            <div style={{ display: 'grid', gap: '15px', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))' }}>
+              {attendance.length === 0 && <div style={{ color: '#888', gridColumn: '1/-1' }}>此區間無打卡紀錄</div>}
+              {attendance.map(record => (
+                <div key={record.id} className="glass-panel" style={{ padding: '15px', borderLeft: record.is_paid ? '4px solid #aaa' : '4px solid #fbbc05' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
+                    <div style={{ fontWeight: 'bold', fontSize: '1.1rem' }}>{record.coaches?.name}</div>
+                    <div style={{ color: '#aaa', fontSize: '0.9rem' }}>{record.work_date}</div>
                   </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '15px', color: '#ccc' }}>
-                    <span>本月總薪水</span>
-                    <span style={{ color: '#fff', fontWeight: 'bold' }}>${summary.totalPay}</span>
-                  </div>
-                  
-                  {summary.pendingPay > 0 ? (
-                    <div style={{ borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: '15px' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '15px' }}>
-                        <span style={{ color: '#fbbc05' }}>未發放金額</span>
-                        <span style={{ color: '#4ade80', fontSize: '1.2rem', fontWeight: 'bold' }}>${summary.pendingPay}</span>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div>
+                      <div style={{ fontSize: '1.2rem', fontWeight: 'bold' }}>{record.hours_worked} hr</div>
+                      <div style={{ color: '#ccc', fontSize: '0.8rem' }}>時薪: ${record.hourly_rate}</div>
+                    </div>
+                    <div style={{ textAlign: 'right' }}>
+                      <div style={{ color: '#4ade80', fontSize: '1.2rem', fontWeight: 'bold' }}>${record.total_pay}</div>
+                      <div style={{ fontSize: '0.8rem', marginTop: '4px' }}>
+                        {record.is_paid ? (
+                          <span style={{ color: '#aaa' }}>已結清</span>
+                        ) : (
+                          <span style={{ color: '#fbbc05' }}>未發放</span>
+                        )}
                       </div>
-                      <button 
-                        className="btn-primary" 
-                        style={{ width: '100%', padding: '10px' }}
-                        onClick={() => handlePayCoach(Object.keys(payrollSummary)[idx], summary.name, summary.pendingPay, summary.pendingRecords)}
-                      >
-                        ✅ 結算發放並記帳
-                      </button>
                     </div>
-                  ) : (
-                    <div style={{ borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: '15px', textAlign: 'center', color: '#4ade80' }}>
-                      本月薪資已全部結清
-                    </div>
+                  </div>
+                  {!record.is_paid && (
+                    <button onClick={() => deleteAttendance(record.id)} style={{ width: '100%', marginTop: '15px', padding: '8px', background: 'rgba(255,107,107,0.1)', color: '#ff6b6b', border: '1px solid rgba(255,107,107,0.3)', borderRadius: '6px' }}>
+                      刪除紀錄
+                    </button>
                   )}
                 </div>
-              ))
-            )}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
       {activeTab === 'roster' && (
         <div className="glass-panel" style={{ padding: '20px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-            <h3 style={{ margin: 0 }}>教練名冊</h3>
-            <button className="btn-primary" onClick={() => setShowAddCoach(!showAddCoach)} style={{ background: showAddCoach ? 'transparent' : 'var(--primary-color)', border: showAddCoach ? '1px solid #ccc' : 'none' }}>
+            <h3 style={{ margin: 0, color: 'var(--primary-color)' }}>教練名冊管理</h3>
+            <button className="btn-primary" onClick={() => setShowAddCoach(!showAddCoach)} style={{ width: 'auto' }}>
               {showAddCoach ? '取消' : '+ 新增教練'}
             </button>
           </div>
 
           {showAddCoach && (
-            <div style={{ background: 'rgba(0,0,0,0.2)', padding: '20px', borderRadius: '12px', marginBottom: '20px', border: '1px solid rgba(255,255,255,0.1)' }}>
-              <form onSubmit={handleAddCoach} style={{ display: 'flex', gap: '15px', alignItems: 'flex-end', flexWrap: 'wrap' }}>
+            <div style={{ background: 'rgba(0,0,0,0.2)', padding: '20px', borderRadius: '12px', marginBottom: '20px', border: '1px solid var(--glass-border)' }}>
+              <h4 style={{ marginTop: 0 }}>輸入系統成員信箱來綁定教練</h4>
+              <form onSubmit={handleAddCoach} style={{ display: 'flex', gap: '15px', flexWrap: 'wrap', alignItems: 'flex-end' }}>
+                <div style={{ flex: 1, minWidth: '200px', position: 'relative' }}>
+                  <label style={{ display: 'block', marginBottom: '5px', fontSize: '0.9rem' }}>成員信箱搜尋</label>
+                  <input 
+                    type="email" 
+                    required 
+                    value={selectedEmail} 
+                    onChange={handleEmailChange} 
+                    placeholder="輸入信箱自動搜尋同球隊成員..."
+                    style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid var(--glass-border)', background: 'rgba(255,255,255,0.1)', color: 'white' }} 
+                  />
+                  {showSuggestions && suggestions.length > 0 && (
+                    <div style={{ position: 'absolute', top: '70px', left: 0, right: 0, background: 'rgba(30,30,40,0.95)', border: '1px solid var(--glass-border)', borderRadius: '8px', zIndex: 10, maxHeight: '150px', overflowY: 'auto' }}>
+                      {suggestions.map((m, idx) => (
+                        <div 
+                          key={idx} 
+                          onClick={() => {
+                            setSelectedEmail(m.email);
+                            setSelectedUserId(m.user_id);
+                            setShowSuggestions(false);
+                            if (!newCoach.name) setNewCoach({ ...newCoach, name: m.email.split('@')[0] });
+                          }}
+                          style={{ padding: '10px 12px', cursor: 'pointer', borderBottom: idx < suggestions.length - 1 ? '1px solid rgba(255,255,255,0.05)' : 'none' }}
+                          onMouseEnter={e => e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.1)'}
+                          onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
+                        >
+                          {m.email} {m.role === 'admin' && <span style={{fontSize: '0.8rem', color: 'var(--primary-color)'}}>(管理員)</span>}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
                 <div style={{ flex: 1, minWidth: '150px' }}>
-                  <label style={{ display: 'block', marginBottom: '5px', fontSize: '0.9rem' }}>教練姓名</label>
+                  <label style={{ display: 'block', marginBottom: '5px', fontSize: '0.9rem' }}>教練顯示名稱</label>
                   <input type="text" required value={newCoach.name} onChange={e => setNewCoach({...newCoach, name: e.target.value})} style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid var(--glass-border)', background: 'rgba(255,255,255,0.1)', color: 'white' }} />
                 </div>
                 <div style={{ flex: 1, minWidth: '150px' }}>
@@ -458,22 +482,18 @@ const CoachPayroll = ({ teamId }) => {
                   <span style={{ fontSize: '0.9rem', color: '#aaa' }}>預設時薪: $</span>
                   <input 
                     type="number" 
-                    defaultValue={coach.default_hourly_rate}
+                    value={coach.default_hourly_rate} 
                     onBlur={(e) => {
-                      if (e.target.value !== String(coach.default_hourly_rate)) {
+                      if (e.target.value != coach.default_hourly_rate) {
                         updateCoachRate(coach.id, e.target.value);
                       }
                     }}
-                    style={{ width: '80px', padding: '6px', borderRadius: '6px', border: '1px solid #555', background: 'transparent', color: 'white' }}
+                    onChange={() => {}}
+                    style={{ width: '80px', padding: '4px 8px', borderRadius: '4px', border: '1px solid var(--glass-border)', background: 'rgba(255,255,255,0.1)', color: 'white' }}
                   />
                 </div>
               </div>
             ))}
-            {coaches.length === 0 && (
-              <div style={{ gridColumn: '1 / -1', textAlign: 'center', padding: '40px', color: '#aaa' }}>
-                目前沒有任何教練資料。
-              </div>
-            )}
           </div>
         </div>
       )}

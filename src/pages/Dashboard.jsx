@@ -67,16 +67,29 @@ const Dashboard = () => {
         {adminRoles.map((role) => {
           if (activeTab !== role.team_id) return null;
           
-          let defaultTab = 'roster';
-          if (role.role === 'coach') {
-            defaultTab = 'coach';
-          }
+          let defaultTab = 'attendance';
           const currentSubTab = teamSubTabs[role.team_id] || defaultTab;
 
           return (
             <div key={role.team_id}>
               {/* 球隊內部子選單 */}
-              <div style={{ display: 'flex', gap: '10px', marginBottom: '30px', background: 'rgba(0,0,0,0.2)', padding: '5px', borderRadius: '8px', display: 'inline-flex' }}>
+              <div className="scrollable-tabs">
+                <button 
+                  onClick={() => handleSubTabChange(role.team_id, 'attendance')}
+                  style={{
+                    padding: '8px 16px',
+                    background: currentSubTab === 'attendance' ? 'var(--primary-color)' : 'transparent',
+                    color: currentSubTab === 'attendance' ? '#fff' : '#aaa',
+                    border: 'none',
+                    borderRadius: '6px',
+                    cursor: 'pointer',
+                    fontWeight: 'bold',
+                    flexShrink: 0
+                  }}
+                >
+                  📝 簽到登記
+                </button>
+
                 {role.role !== 'coach' && (
                   <>
                     <button 
@@ -88,7 +101,8 @@ const Dashboard = () => {
                         border: 'none',
                         borderRadius: '6px',
                         cursor: 'pointer',
-                        fontWeight: 'bold'
+                        fontWeight: 'bold',
+                        flexShrink: 0
                       }}
                     >
                       📝 球員名冊
@@ -102,7 +116,8 @@ const Dashboard = () => {
                         border: 'none',
                         borderRadius: '6px',
                         cursor: 'pointer',
-                        fontWeight: 'bold'
+                        fontWeight: 'bold',
+                        flexShrink: 0
                       }}
                     >
                       💰 帳務收費
@@ -110,20 +125,23 @@ const Dashboard = () => {
                   </>
                 )}
                 
-                <button 
-                  onClick={() => handleSubTabChange(role.team_id, 'coach')}
-                  style={{
-                    padding: '8px 16px',
-                    background: currentSubTab === 'coach' ? 'var(--primary-color)' : 'transparent',
-                    color: currentSubTab === 'coach' ? '#fff' : '#aaa',
-                    border: 'none',
-                    borderRadius: '6px',
-                    cursor: 'pointer',
-                    fontWeight: 'bold'
-                  }}
-                >
-                  👨‍🏫 {role.role === 'coach' ? '簽到打卡' : '教練與薪資'}
-                </button>
+                {role.role !== 'coach' && (
+                  <button 
+                    onClick={() => handleSubTabChange(role.team_id, 'roster')}
+                    style={{
+                      padding: '8px 16px',
+                      background: currentSubTab === 'roster' ? 'var(--primary-color)' : 'transparent',
+                      color: currentSubTab === 'roster' ? '#fff' : '#aaa',
+                      border: 'none',
+                      borderRadius: '6px',
+                      cursor: 'pointer',
+                      fontWeight: 'bold',
+                      flexShrink: 0
+                    }}
+                  >
+                    👨‍🏫 教練與薪資
+                  </button>
+                )}
 
                 {role.role !== 'coach' && (
                   <button 
@@ -135,7 +153,8 @@ const Dashboard = () => {
                       border: 'none',
                       borderRadius: '6px',
                       cursor: 'pointer',
-                      fontWeight: 'bold'
+                      fontWeight: 'bold',
+                      flexShrink: 0
                     }}
                   >
                     ⚙️ 球隊權限
@@ -144,6 +163,10 @@ const Dashboard = () => {
               </div>
 
               {/* 子頁面內容切換 */}
+              {currentSubTab === 'attendance' && (
+                <CoachPayroll teamId={role.team_id} forcedTab="attendance" hideSubTabs={true} />
+              )}
+
               {currentSubTab === 'roster' && (
                 <StudentList teamId={role.team_id} />
               )}
@@ -152,8 +175,8 @@ const Dashboard = () => {
                 <BillingDashboard teamId={role.team_id} />
               )}
 
-              {currentSubTab === 'coach' && (
-                <CoachPayroll teamId={role.team_id} />
+              {currentSubTab === 'payroll' && (
+                <CoachPayroll teamId={role.team_id} forcedTab="payroll" />
               )}
 
               {currentSubTab === 'settings' && (

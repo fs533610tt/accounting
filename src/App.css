@@ -182,3 +182,30 @@
     border-right-color: var(--border);
   }
 }
+/* Scrollable Tabs for Mobile */
+.scrollable-tabs {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 30px;
+  background: rgba(0, 0, 0, 0.2);
+  padding: 5px;
+  border-radius: 8px;
+  overflow-x: auto;
+  white-space: nowrap;
+  flex-wrap: nowrap;
+  -webkit-overflow-scrolling: touch;
+  max-width: 100%;
+  scrollbar-width: none; /* Firefox */
+}
+
+.scrollable-tabs::-webkit-scrollbar {
+  display: none; /* Chrome, Safari, Edge */
+}
+/* Hide Scrollbar Generic Class */
+.hide-scrollbar {
+  scrollbar-width: none; /* Firefox */
+}
+
+.hide-scrollbar::-webkit-scrollbar {
+  display: none; /* Chrome, Safari, Edge */
+}

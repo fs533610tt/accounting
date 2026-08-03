@@ -210,7 +210,6 @@ const StudentList = ({ teamId }) => {
   return (
     <div style={{ marginTop: '30px' }}>
       <div className="flex-mobile-column" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', gap: '15px' }}>
-        <h2 style={{ margin: 0 }}>球員名冊管理</h2>
         <div className="action-buttons-container" style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', justifyContent: 'center' }}>
           <button 
             onClick={handleBulkPromote}
