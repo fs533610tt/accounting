@@ -5,6 +5,7 @@ import TeamManagement from '../components/TeamManagement';
 import StudentList from '../components/StudentList';
 import BillingDashboard from '../components/BillingDashboard';
 import TeamSettings from '../components/TeamSettings';
+import CoachPayroll from './CoachPayroll';
 import { useOutletContext } from 'react-router-dom';
 
 const Dashboard = () => {
@@ -66,54 +67,80 @@ const Dashboard = () => {
         {adminRoles.map((role) => {
           if (activeTab !== role.team_id) return null;
           
-          const currentSubTab = teamSubTabs[role.team_id] || 'roster';
+          let defaultTab = 'roster';
+          if (role.role === 'coach') {
+            defaultTab = 'coach';
+          }
+          const currentSubTab = teamSubTabs[role.team_id] || defaultTab;
 
           return (
             <div key={role.team_id}>
               {/* 球隊內部子選單 */}
               <div style={{ display: 'flex', gap: '10px', marginBottom: '30px', background: 'rgba(0,0,0,0.2)', padding: '5px', borderRadius: '8px', display: 'inline-flex' }}>
+                {role.role !== 'coach' && (
+                  <>
+                    <button 
+                      onClick={() => handleSubTabChange(role.team_id, 'roster')}
+                      style={{
+                        padding: '8px 16px',
+                        background: currentSubTab === 'roster' ? 'var(--primary-color)' : 'transparent',
+                        color: currentSubTab === 'roster' ? '#fff' : '#aaa',
+                        border: 'none',
+                        borderRadius: '6px',
+                        cursor: 'pointer',
+                        fontWeight: 'bold'
+                      }}
+                    >
+                      📝 球員名冊
+                    </button>
+                    <button 
+                      onClick={() => handleSubTabChange(role.team_id, 'billing')}
+                      style={{
+                        padding: '8px 16px',
+                        background: currentSubTab === 'billing' ? 'var(--primary-color)' : 'transparent',
+                        color: currentSubTab === 'billing' ? '#fff' : '#aaa',
+                        border: 'none',
+                        borderRadius: '6px',
+                        cursor: 'pointer',
+                        fontWeight: 'bold'
+                      }}
+                    >
+                      💰 帳務收費
+                    </button>
+                  </>
+                )}
+                
                 <button 
-                  onClick={() => handleSubTabChange(role.team_id, 'roster')}
+                  onClick={() => handleSubTabChange(role.team_id, 'coach')}
                   style={{
                     padding: '8px 16px',
-                    background: currentSubTab === 'roster' ? 'var(--primary-color)' : 'transparent',
-                    color: currentSubTab === 'roster' ? '#fff' : '#aaa',
+                    background: currentSubTab === 'coach' ? 'var(--primary-color)' : 'transparent',
+                    color: currentSubTab === 'coach' ? '#fff' : '#aaa',
                     border: 'none',
                     borderRadius: '6px',
                     cursor: 'pointer',
                     fontWeight: 'bold'
                   }}
                 >
-                  📝 球員名冊
+                  👨‍🏫 {role.role === 'coach' ? '簽到打卡' : '教練與薪資'}
                 </button>
-                <button 
-                  onClick={() => handleSubTabChange(role.team_id, 'billing')}
-                  style={{
-                    padding: '8px 16px',
-                    background: currentSubTab === 'billing' ? 'var(--primary-color)' : 'transparent',
-                    color: currentSubTab === 'billing' ? '#fff' : '#aaa',
-                    border: 'none',
-                    borderRadius: '6px',
-                    cursor: 'pointer',
-                    fontWeight: 'bold'
-                  }}
-                >
-                  💰 帳務收費
-                </button>
-                <button 
-                  onClick={() => handleSubTabChange(role.team_id, 'settings')}
-                  style={{
-                    padding: '8px 16px',
-                    background: currentSubTab === 'settings' ? 'var(--primary-color)' : 'transparent',
-                    color: currentSubTab === 'settings' ? '#fff' : '#aaa',
-                    border: 'none',
-                    borderRadius: '6px',
-                    cursor: 'pointer',
-                    fontWeight: 'bold'
-                  }}
-                >
-                  ⚙️ 球隊權限
-                </button>
+
+                {role.role !== 'coach' && (
+                  <button 
+                    onClick={() => handleSubTabChange(role.team_id, 'settings')}
+                    style={{
+                      padding: '8px 16px',
+                      background: currentSubTab === 'settings' ? 'var(--primary-color)' : 'transparent',
+                      color: currentSubTab === 'settings' ? '#fff' : '#aaa',
+                      border: 'none',
+                      borderRadius: '6px',
+                      cursor: 'pointer',
+                      fontWeight: 'bold'
+                    }}
+                  >
+                    ⚙️ 球隊權限
+                  </button>
+                )}
               </div>
 
               {/* 子頁面內容切換 */}
@@ -123,6 +150,10 @@ const Dashboard = () => {
 
               {currentSubTab === 'billing' && (
                 <BillingDashboard teamId={role.team_id} />
+              )}
+
+              {currentSubTab === 'coach' && (
+                <CoachPayroll teamId={role.team_id} />
               )}
 
               {currentSubTab === 'settings' && (
