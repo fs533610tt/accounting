@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Navigate, Outlet } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { supabase } from '../config/supabaseClient';
 
 const AdminLayout = () => {
   const { user, isSuperAdmin, userRoles, logout } = useAuth();
@@ -50,7 +51,6 @@ const AdminLayout = () => {
               onClick={async () => {
                 const code = window.prompt('請輸入邀請碼：');
                 if (!code) return;
-                const { supabase } = await import('../config/supabaseClient');
                 const { error } = await supabase.rpc('join_team_by_code', { invite_code: code });
                 if (error) {
                   alert('加入失敗：' + error.message);
