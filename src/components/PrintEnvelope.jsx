@@ -297,15 +297,17 @@ ${allPages}
           boxSizing: 'border-box'
         }}>
           {/* 信封上半部 */}
-          <div style={{ position: 'absolute', top: HEADER_TOP, left: CONTENT_LEFT, right: '1.5cm', height: '0.8cm' }}>
-            <div className="static-text" style={{ position: 'absolute', left: 0, bottom: 0, fontSize: '1.1rem', fontWeight: 'bold' }}>
-              姓 名 <span className="dynamic-text" style={{ display: 'inline-block', width: '5.2cm', textAlign: 'center', color: shouldPrintName ? '#000' : 'transparent' }}>{shouldPrintName ? record.students?.name : ''}</span>
+          {printMode !== 'text-only' && (
+            <div style={{ position: 'absolute', top: HEADER_TOP, left: CONTENT_LEFT, right: '1.5cm', height: '0.8cm' }}>
+              <div className="static-text" style={{ position: 'absolute', left: 0, bottom: 0, fontSize: '1.1rem', fontWeight: 'bold' }}>
+                姓 名 <span className="dynamic-text" style={{ display: 'inline-block', width: '5.2cm', textAlign: 'center', color: shouldPrintName ? '#000' : 'transparent' }}>{shouldPrintName ? record.students?.name : ''}</span>
+              </div>
+              <div className="static-text" style={{ position: 'absolute', right: 0, bottom: 0, fontSize: '0.75rem', width: '11cm', lineHeight: '1.3', textAlign: 'left' }}>
+                貴子弟下列月份應繳學費，敬煩家長惠即裝入袋中，<br />
+                請於本月 <span className="date-blank"></span> 日前繳交為荷！ □ 半日 □ 全日
+              </div>
             </div>
-            <div className="static-text" style={{ position: 'absolute', right: 0, bottom: 0, fontSize: '0.75rem', width: '11cm', lineHeight: '1.3', textAlign: 'left' }}>
-              貴子弟下列月份應繳學費，敬煩家長惠即裝入袋中，<br />
-              請於本月 <span style={{ display: 'inline-block', width: '1.5cm', textDecoration: 'underline' }}></span> 日前繳交為荷！ □ 半日 □ 全日
-            </div>
-          </div>
+          )}
 
           {/* 表格 */}
           <div style={{
@@ -313,20 +315,20 @@ ${allPages}
             display: 'grid',
             gridTemplateColumns: '1.3cm repeat(5, 2.25cm) 2.5cm 1.2cm 2.65cm',
             gridTemplateRows: '0.8cm repeat(6, 0.95cm)',
-            border: '1px solid #b91c1c',
+            border: printMode === 'text-only' ? '1px dashed #e2e8f0' : '1px solid #b91c1c',
             boxSizing: 'border-box', overflow: 'hidden'
           }}>
             {['月份', '費用1', '費用2', '費用3', '費用4', '費用5', '合計'].map(t => (
-              <div key={t} className="envelope-grid-cell static-text">{t}</div>
+              <div key={t} className={`envelope-grid-cell ${printMode === 'text-only' ? 'preview-text-only-hdr' : 'static-text'}`}>{printMode === 'text-only' ? '' : t}</div>
             ))}
-            <div className="envelope-grid-cell static-text envelope-date-header">
-              <div>月</div><div>日</div>
+            <div className={`envelope-grid-cell ${printMode === 'text-only' ? 'preview-text-only-hdr' : 'static-text'} envelope-date-header`}>
+              {printMode !== 'text-only' && <><div>月</div><div>日</div></>}
             </div>
-            <div className="envelope-grid-cell static-text">收款簽章</div>
+            <div className={`envelope-grid-cell ${printMode === 'text-only' ? 'preview-text-only-hdr' : 'static-text'}`}>{printMode === 'text-only' ? '' : '收款簽章'}</div>
 
             {PRINT_ROW_NUMBERS.flatMap(rowNum => {
               const isTarget = rowNum === targetRow;
-              const cls = isTarget ? 'envelope-grid-cell dynamic-text' : 'envelope-grid-cell static-text';
+              const cls = `${isTarget ? 'envelope-grid-cell dynamic-text' : 'envelope-grid-cell static-text'} ${printMode === 'text-only' ? 'preview-text-only-hdr' : ''}`;
               const cells = [
                 <div key={`m-${rowNum}`} className={cls}>
                   {isTarget && <span style={{ fontSize: '1.3rem', fontWeight: 'bold' }}>{printMonth}</span>}
@@ -355,9 +357,11 @@ ${allPages}
             })}
           </div>
 
-          <div className="static-text" style={{ position: 'absolute', top: '9.0cm', left: CONTENT_LEFT, fontSize: '0.75rem' }}>
-            ※ 備註：本收費袋經收款人簽章後代為收據。
-          </div>
+          {printMode !== 'text-only' && (
+            <div className="static-text" style={{ position: 'absolute', top: '9.0cm', left: CONTENT_LEFT, fontSize: '0.75rem' }}>
+              ※ 備註：本收費袋經收款人簽章後代為收據。
+            </div>
+          )}
         </div>
       </div>
     );
@@ -462,6 +466,13 @@ ${allPages}
         .envelope-grid-cell:nth-last-child(-n+9) { border-bottom: none; }
         .envelope-date-header { flex-direction: column; gap: 0; }
         .envelope-date-header > div:first-child { width: 100%; border-bottom: 1px solid #b91c1c; }
+
+        .preview-text-only-hdr {
+          border-color: transparent !important;
+        }
+        .text-only-preview-cell {
+          border-color: rgba(0, 0, 0, 0.05) !important;
+        }
       `}} />
     </div>
   );
