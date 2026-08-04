@@ -18,6 +18,8 @@ These rules must be strictly followed by all AI agents operating within this wor
    - Glassmorphism effects (using the existing `.glass-panel` CSS classes)
    - Vibrant accent colors and smooth micro-animations.
    - **Native Element Styling**: ALWAYS explicitly style native HTML form elements (like `<select>`, `<option>`, and `<input>`) with dark backgrounds (e.g., `#1a1a2e` or `rgba(0,0,0,0.8)`) and white text (`color: #fff`) to prevent browser defaults from rendering white text on light gray backgrounds in dark mode.
+5. **Button Loading States**: For better UX, any button that triggers an asynchronous operation (especially batch operations like "Apply to Selected") MUST have a loading state to indicate processing. Change the button text (e.g. to "處理中..." or using a spinner) and disable the button while the operation is running.
+6. **Horizontal Scrolling for Action Bars & Stats**: To save vertical space on mobile and prevent buttons or stat cards from cramping up and wrapping into multiple lines, always wrap action button groups and statistics cards in a horizontally scrollable container (`display: flex`, `flex-wrap: nowrap`, `overflow-x: auto`). Hide the scrollbar visually using the global `.scrollable-container` class.
 
 ---
 🚨 **CRITICAL UI RULE (VIOLATED 3 TIMES - DO NOT IGNORE)** 🚨

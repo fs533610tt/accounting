@@ -234,24 +234,24 @@ const TeamLedger = ({ teamId }) => {
 
   return (
     <div>
-      <div style={{ display: 'flex', gap: '20px', marginBottom: '20px', flexWrap: 'wrap' }}>
-        <div style={{ flex: 1, minWidth: '150px', background: 'rgba(255, 165, 0, 0.05)', padding: '20px', borderRadius: '12px', border: '1px solid rgba(255, 165, 0, 0.3)' }}>
+      <div className="scrollable-container" style={{ display: 'flex', gap: '15px', marginBottom: '20px', overflowX: 'auto', paddingBottom: '10px' }}>
+        <div style={{ flex: '0 0 auto', minWidth: '130px', background: 'rgba(255, 165, 0, 0.05)', padding: '20px', borderRadius: '12px', border: '1px solid rgba(255, 165, 0, 0.3)' }}>
           <div style={{ fontSize: '0.9rem', color: '#ffa500', marginBottom: '5px' }}>⚠️ 待核銷代墊款</div>
           <div style={{ fontSize: '2rem', fontWeight: 'bold', color: '#ffa500' }}>
             ${pendingReimbursement}
           </div>
         </div>
-        <div style={{ flex: 1, minWidth: '150px', background: 'rgba(255,255,255,0.05)', padding: '20px', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.1)' }}>
+        <div style={{ flex: '0 0 auto', minWidth: '130px', background: 'rgba(255,255,255,0.05)', padding: '20px', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.1)' }}>
           <div style={{ fontSize: '0.9rem', color: '#aaa', marginBottom: '5px' }}>目前總結餘</div>
           <div style={{ fontSize: '2rem', fontWeight: 'bold', color: totalBalance >= 0 ? '#4ade80' : '#ff6b6b' }}>
             {totalBalance >= 0 ? '+' : ''}{totalBalance}
           </div>
         </div>
-        <div style={{ flex: 1, minWidth: '150px', background: 'rgba(74, 222, 128, 0.05)', padding: '20px', borderRadius: '12px', border: '1px solid rgba(74, 222, 128, 0.2)' }}>
+        <div style={{ flex: '0 0 auto', minWidth: '130px', background: 'rgba(74, 222, 128, 0.05)', padding: '20px', borderRadius: '12px', border: '1px solid rgba(74, 222, 128, 0.2)' }}>
           <div style={{ fontSize: '0.9rem', color: '#4ade80', marginBottom: '5px' }}>總收入</div>
           <div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#4ade80' }}>+{totalIncome}</div>
         </div>
-        <div style={{ flex: 1, minWidth: '150px', background: 'rgba(255, 107, 107, 0.05)', padding: '20px', borderRadius: '12px', border: '1px solid rgba(255, 107, 107, 0.2)' }}>
+        <div style={{ flex: '0 0 auto', minWidth: '130px', background: 'rgba(255, 107, 107, 0.05)', padding: '20px', borderRadius: '12px', border: '1px solid rgba(255, 107, 107, 0.2)' }}>
           <div style={{ fontSize: '0.9rem', color: '#ff6b6b', marginBottom: '5px' }}>總支出</div>
           <div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#ff6b6b' }}>-{totalExpense}</div>
         </div>

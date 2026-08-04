@@ -95,6 +95,15 @@
   }
 }
 
+/* Global Utility for hiding scrollbar in horizontally scrollable containers */
+.scrollable-container::-webkit-scrollbar {
+  display: none;
+}
+.scrollable-container {
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
+}
+
 #docs {
   border-right: 1px solid var(--border);
 

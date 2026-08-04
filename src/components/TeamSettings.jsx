@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import Swal from 'sweetalert2';
 import { supabase } from '../config/supabaseClient';
 
 const TeamSettings = ({ teamId }) => {
@@ -67,9 +68,9 @@ const TeamSettings = ({ teamId }) => {
     });
 
     if (error) {
-      alert('指派失敗：' + error.message);
+      Swal.fire({ title: '指派失敗', text: error.message, icon: 'error' });
     } else {
-      alert('指派成功！');
+      await Swal.fire({ title: '指派成功！', icon: 'success' });
       fetchAdmins();
       setSelectedEmail('');
       setSuggestions([]);
@@ -78,7 +79,17 @@ const TeamSettings = ({ teamId }) => {
   };
 
   const handleRemoveAdmin = async (emailToRemove) => {
-    if (!window.confirm(`確定要移除 ${emailToRemove} 的管理員權限嗎？`)) return;
+    const result = await Swal.fire({
+      title: '確定要移除嗎？',
+      text: `確定要移除 ${emailToRemove} 的管理員權限嗎？`,
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#d33',
+      cancelButtonColor: '#3085d6',
+      confirmButtonText: '確定移除',
+      cancelButtonText: '取消'
+    });
+    if (!result.isConfirmed) return;
     
     const { error } = await supabase.rpc('remove_team_admin', {
       target_email: emailToRemove,
@@ -86,9 +97,9 @@ const TeamSettings = ({ teamId }) => {
     });
 
     if (error) {
-      alert('移除失敗：' + error.message);
+      Swal.fire({ title: '移除失敗', text: error.message, icon: 'error' });
     } else {
-      alert('移除成功！');
+      await Swal.fire({ title: '移除成功', icon: 'success' });
       fetchAdmins();
     }
   };
@@ -96,18 +107,28 @@ const TeamSettings = ({ teamId }) => {
   const handleGenerateInvite = async () => {
     const { data, error } = await supabase.rpc('generate_invite_code', { target_team_id: teamId });
     if (error) {
-      alert('產生失敗：' + error.message);
+      Swal.fire({ title: '產生失敗', text: error.message, icon: 'error' });
     } else {
       fetchInvites();
-      alert(`產生成功！邀請碼為：${data}`);
+      await Swal.fire({ title: '產生成功', text: `邀請碼為：${data}`, icon: 'success' });
     }
   };
 
   const handleDeleteInvite = async (code) => {
-    if (!window.confirm('確定要刪除這組邀請碼嗎？這將使該邀請碼立即失效。')) return;
+    const result = await Swal.fire({
+      title: '確定要刪除嗎？',
+      text: '確定要刪除這組邀請碼嗎？這將使該邀請碼立即失效。',
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#d33',
+      cancelButtonColor: '#3085d6',
+      confirmButtonText: '確定刪除',
+      cancelButtonText: '取消'
+    });
+    if (!result.isConfirmed) return;
     const { error } = await supabase.rpc('delete_invite_code', { target_code: code, target_team_id: teamId });
     if (error) {
-      alert('刪除失敗：' + error.message);
+      Swal.fire({ title: '刪除失敗', text: error.message, icon: 'error' });
     } else {
       fetchInvites();
     }

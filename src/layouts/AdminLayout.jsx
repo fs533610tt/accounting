@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import Swal from 'sweetalert2';
 import { Navigate, Outlet } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../config/supabaseClient';
@@ -50,13 +51,19 @@ const AdminLayout = () => {
             
             <button 
               onClick={async () => {
-                const code = window.prompt('請輸入邀請碼：');
+                const { value: code } = await Swal.fire({
+                  title: '請輸入邀請碼',
+                  input: 'text',
+                  showCancelButton: true,
+                  confirmButtonText: '確定',
+                  cancelButtonText: '取消'
+                });
                 if (!code) return;
                 const { error } = await supabase.rpc('join_team_by_code', { invite_code: code });
                 if (error) {
-                  alert('加入失敗：' + error.message);
+                  Swal.fire({ title: '加入失敗', text: error.message, icon: 'error' });
                 } else {
-                  alert('成功加入球隊！請重新整理頁面。');
+                  await Swal.fire({ title: '加入成功', text: '成功加入球隊！請重新整理頁面。', icon: 'success' });
                   window.location.reload();
                 }
               }}

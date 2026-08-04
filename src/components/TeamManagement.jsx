@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import Swal from 'sweetalert2';
 import { supabase } from '../config/supabaseClient';
 
 const TeamManagement = () => {
@@ -40,11 +41,11 @@ const TeamManagement = () => {
       .select();
 
     if (error) {
-      alert('建立失敗：' + error.message);
+      Swal.fire({ title: '建立失敗', text: error.message, icon: 'error' });
     } else {
       setNewTeamName('');
       fetchTeams();
-      alert('球隊建立成功！');
+      await Swal.fire({ title: '建立成功', text: '球隊建立成功！', icon: 'success' });
     }
   };
 
@@ -89,9 +90,9 @@ const TeamManagement = () => {
     });
 
     if (error) {
-      alert('指派失敗：' + error.message);
+      Swal.fire({ title: '指派失敗', text: error.message, icon: 'error' });
     } else {
-      alert('指派成功！');
+      await Swal.fire({ title: '指派成功', icon: 'success' });
       
       // 重新整理目前管理員名單
       setLoadingAdmins(true);
@@ -106,7 +107,17 @@ const TeamManagement = () => {
   };
 
   const handleRemoveAdmin = async (emailToRemove) => {
-    if (!window.confirm(`確定要移除 ${emailToRemove} 的管理員權限嗎？`)) return;
+    const result = await Swal.fire({
+      title: '確定要移除嗎？',
+      text: `確定要移除 ${emailToRemove} 的管理員權限嗎？`,
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#d33',
+      cancelButtonColor: '#3085d6',
+      confirmButtonText: '確定移除',
+      cancelButtonText: '取消'
+    });
+    if (!result.isConfirmed) return;
     
     const { error } = await supabase.rpc('remove_team_admin', {
       target_email: emailToRemove,
@@ -114,9 +125,9 @@ const TeamManagement = () => {
     });
 
     if (error) {
-      alert('移除失敗：' + error.message);
+      Swal.fire({ title: '移除失敗', text: error.message, icon: 'error' });
     } else {
-      alert('移除成功！');
+      await Swal.fire({ title: '移除成功', icon: 'success' });
       setCurrentAdmins(currentAdmins.filter(a => a.email !== emailToRemove));
     }
   };

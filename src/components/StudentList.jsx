@@ -56,7 +56,7 @@ const StudentList = ({ teamId }) => {
       .select();
 
     if (error) {
-      alert('新增失敗：' + error.message);
+      showError('新增失敗', error.message);
     } else if (data) {
       setStudents([data[0], ...students]);
       setShowAddForm(false);
@@ -131,7 +131,7 @@ const StudentList = ({ teamId }) => {
       .eq('id', id);
 
     if (error) {
-      alert('儲存失敗：' + error.message);
+      showError('儲存失敗', error.message);
     } else {
       setStudents(students.map(s => s.id === id ? { ...s, ...editForm } : s));
       setEditingId(null);
@@ -207,43 +207,60 @@ const StudentList = ({ teamId }) => {
     XLSX.writeFile(workbook, `球員名冊_${dateStr}.xlsx`);
   };
 
+  const activeCount = students.filter(s => s.is_active !== false).length;
+  const inactiveCount = students.filter(s => s.is_active === false).length;
+
   return (
     <div style={{ marginTop: '30px' }}>
-      <div className="flex-mobile-column" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', gap: '15px' }}>
-        <div className="action-buttons-container" style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', justifyContent: 'center' }}>
-          <button className="btn-primary" onClick={() => setShowAddForm(!showAddForm)}>
-            {showAddForm ? '取消新增' : '+ 新增球員'}
-          </button>
-          <button 
-            onClick={() => setShowInactive(!showInactive)}
-            style={{ 
-              background: showInactive ? 'var(--primary-color)' : 'rgba(255,255,255,0.05)', 
-              color: showInactive ? '#fff' : '#ccc', 
-              border: `1px solid ${showInactive ? 'var(--primary-color)' : 'rgba(255,255,255,0.1)'}`, 
-              padding: '8px 16px', 
-              borderRadius: '8px', 
-              cursor: 'pointer',
-              fontWeight: 'bold',
-              transition: 'all 0.3s ease'
-            }}
-          >
-            {showInactive ? '隱藏歷史球員' : '顯示歷史球員'}
-          </button>
-          <button 
-            onClick={handleExportExcel}
-            disabled={students.length === 0}
-            style={{ 
-              background: '#217346', 
-              color: '#fff', 
-              border: 'none', 
-              padding: '8px 16px', 
-              borderRadius: '8px', 
-              cursor: students.length === 0 ? 'not-allowed' : 'pointer',
-              fontWeight: 'bold'
-            }}
-          >
-            📊 匯出 Excel
-          </button>
+      <div className="scrollable-container" style={{ display: 'flex', alignItems: 'center', marginBottom: '20px', gap: '10px', overflowX: 'auto', paddingBottom: '10px', whiteSpace: 'nowrap' }}>
+        <button 
+          onClick={() => setShowAddForm(!showAddForm)}
+          style={{ 
+            background: 'rgba(96, 165, 250, 0.15)', 
+            color: '#60a5fa', 
+            border: '1px solid rgba(96, 165, 250, 0.3)', 
+            padding: '8px 16px', 
+            borderRadius: '8px', 
+            cursor: 'pointer', 
+            fontWeight: 'bold',
+            flex: '0 0 auto'
+          }}
+        >
+          {showAddForm ? '取消新增' : `+ 新增球員 (現役 ${activeCount} 人)`}
+        </button>
+        <button 
+          onClick={() => setShowInactive(!showInactive)}
+          style={{ 
+            background: showInactive ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.05)', 
+            color: showInactive ? '#fff' : '#ccc', 
+            border: '1px solid rgba(255,255,255,0.1)', 
+            padding: '8px 16px', 
+            borderRadius: '8px', 
+            cursor: 'pointer',
+            fontWeight: 'bold',
+            transition: 'all 0.3s ease',
+            flex: '0 0 auto'
+          }}
+        >
+          {showInactive ? `隱藏歷史球員 (${inactiveCount})` : `顯示歷史球員 (${inactiveCount})`}
+        </button>
+        <button 
+          onClick={handleExportExcel}
+          disabled={students.length === 0}
+          style={{ 
+            background: 'rgba(74, 222, 128, 0.15)', 
+            color: '#4ade80', 
+            border: '1px solid rgba(74, 222, 128, 0.3)', 
+            padding: '8px 16px', 
+            borderRadius: '8px', 
+            cursor: students.length === 0 ? 'not-allowed' : 'pointer',
+            fontWeight: 'bold',
+            flex: '0 0 auto'
+          }}
+        >
+          📊 匯出 Excel
+        </button>
+          {/* 一鍵升年級按鈕先隱藏起來 
           <button 
             onClick={handleBulkPromote}
             disabled={students.length === 0}
@@ -254,13 +271,12 @@ const StudentList = ({ teamId }) => {
               padding: '8px 16px', 
               borderRadius: '8px', 
               cursor: students.length === 0 ? 'not-allowed' : 'pointer',
-              fontWeight: 'bold',
-              boxShadow: '0 4px 15px rgba(255, 154, 158, 0.3)'
+              fontWeight: 'bold'
             }}
           >
             🚀 一鍵升年級
           </button>
-        </div>
+          */}
       </div>
 
       <div style={{ marginBottom: '20px' }}>

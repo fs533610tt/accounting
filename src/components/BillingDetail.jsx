@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
+import Swal from 'sweetalert2';
 import { supabase } from '../config/supabaseClient';
 import PrintEnvelope from './PrintEnvelope';
 import * as XLSX from 'xlsx';
+import { Plus, Trash2 } from 'lucide-react';
 
 const BillingDetail = ({ cycleId, onBack }) => {
   const [cycle, setCycle] = useState(null);
@@ -9,13 +11,23 @@ const BillingDetail = ({ cycleId, onBack }) => {
   const [loading, setLoading] = useState(true);
   const [showPrint, setShowPrint] = useState(false);
   const [selectedRecordIds, setSelectedRecordIds] = useState(new Set());
-  const [batchPrice, setBatchPrice] = useState('');
+  const [batchItems, setBatchItems] = useState([{ name: '', amount: '' }]);
   const [presets, setPresets] = useState([]);
   const [activeTab, setActiveTab] = useState('unassigned');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filterStatus, setFilterStatus] = useState('all');
+  const [batchPaidAt, setBatchPaidAt] = useState(() => {
+    // Get local date string YYYY-MM-DD
+    const d = new Date();
+    d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+    return d.toISOString().split('T')[0];
+  });
+  const [batchPaymentMethod, setBatchPaymentMethod] = useState('cash'); // 'cash', 'transfer'
+  const [isProcessingBatch, setIsProcessingBatch] = useState(false);
+  const [processingRecordId, setProcessingRecordId] = useState(null);
 
   useEffect(() => {
     fetchBillingDetails();
-    fetchPresets();
   }, [cycleId]);
 
   const fetchPresets = async (team_id) => {
@@ -27,6 +39,10 @@ const BillingDetail = ({ cycleId, onBack }) => {
       .order('created_at', { ascending: true });
     setPresets(data || []);
   };
+
+  const getBillingItems = (record) => record.billing_record_items || [];
+  const hasBillingItems = (record) => getBillingItems(record).length > 0;
+  const isAssignedRecord = (record) => hasBillingItems(record) || Number(record.amount_due) !== 0;
 
   const fetchBillingDetails = async () => {
     setLoading(true);
@@ -60,6 +76,14 @@ const BillingDetail = ({ cycleId, onBack }) => {
           grade,
           class_name,
           is_officer
+        ),
+        billing_record_items (
+          id,
+          billing_record_id,
+          name,
+          amount,
+          sort_order,
+          created_at
         )
       `)
       .eq('cycle_id', cycleId)
@@ -74,6 +98,55 @@ const BillingDetail = ({ cycleId, onBack }) => {
     setLoading(false);
   };
 
+  const handleSyncNewStudents = async () => {
+    if (!cycle?.team_id) return;
+    
+    setIsProcessingBatch(true);
+    // 1. Get all active students for this team
+    const { data: activeStudents, error: studentError } = await supabase
+      .from('students')
+      .select('id')
+      .eq('team_id', cycle.team_id)
+      .eq('is_active', true);
+      
+    if (studentError) {
+      Swal.fire({ title: '同步失敗', text: '無法取得球員名單', icon: 'error' });
+      setIsProcessingBatch(false);
+      return;
+    }
+    
+    // 2. Find missing students
+    const existingStudentIds = new Set(records.map(r => r.student_id));
+    const missingStudents = activeStudents.filter(s => !existingStudentIds.has(s.id));
+    
+    if (missingStudents.length === 0) {
+      Swal.fire({ title: '已是最新', text: '目前沒有新增的球員需要同步！', icon: 'info' });
+      setIsProcessingBatch(false);
+      return;
+    }
+    
+    // 3. Insert new records for missing students
+    const recordsToInsert = missingStudents.map(student => ({
+      cycle_id: cycleId,
+      student_id: student.id,
+      amount_due: 0,
+      amount_paid: 0,
+      status: 'pending'
+    }));
+    
+    const { error: insertError } = await supabase
+      .from('billing_records')
+      .insert(recordsToInsert);
+      
+    if (insertError) {
+      Swal.fire({ title: '同步失敗', text: insertError.message, icon: 'error' });
+    } else {
+      Swal.fire({ title: '同步成功', text: `成功加入 ${missingStudents.length} 位新球員！`, icon: 'success' });
+      fetchBillingDetails();
+    }
+    setIsProcessingBatch(false);
+  };
+
   // 更新單筆明細的應繳/已繳金額
   const handleUpdateRecord = async (recordId, updates) => {
     const { error } = await supabase
@@ -82,55 +155,164 @@ const BillingDetail = ({ cycleId, onBack }) => {
       .eq('id', recordId);
 
     if (error) {
-      alert('更新失敗：' + error.message);
+      Swal.fire({ title: '更新失敗', text: error.message, icon: 'error' });
     } else {
       setRecords(prev => prev.map(r => r.id === recordId ? { ...r, ...updates } : r));
     }
   };
 
-  // 移除收費設定
-  const handleDeleteRecord = async (recordId) => {
-    if (!window.confirm('確定要移除此設定嗎？該學生將回到「未設定費用」名單。')) return;
-    
-    const { error } = await supabase
-      .from('billing_records')
+  const resetBillingRecord = async (recordId) => {
+    const { error: itemsError } = await supabase
+      .from('billing_record_items')
       .delete()
+      .eq('billing_record_id', recordId);
+
+    if (itemsError) return itemsError;
+
+    const { error: recordError } = await supabase
+      .from('billing_records')
+      .update({
+        amount_due: 0,
+        amount_paid: 0,
+        status: 'pending',
+        note: null,
+        paid_at: null,
+        payment_method: null
+      })
       .eq('id', recordId);
 
+    return recordError;
+  };
+
+  // 移除收費設定
+  const handleDeleteRecord = async (recordId) => {
+    const result = await Swal.fire({
+      title: '確定要移除嗎？',
+      text: '確定要移除此設定嗎？該學生將回到「未設定費用」名單。',
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#d33',
+      cancelButtonColor: '#3085d6',
+      confirmButtonText: '確定移除',
+      cancelButtonText: '取消'
+    });
+    if (!result.isConfirmed) return;
+    
+    const error = await resetBillingRecord(recordId);
+
     if (error) {
-      alert('移除失敗：' + error.message);
+      Swal.fire({ title: '移除失敗', text: error.message, icon: 'error' });
     } else {
-      setRecords(records.filter(r => r.id !== recordId));
       if (selectedRecordIds.has(recordId)) {
         const newSet = new Set(selectedRecordIds);
         newSet.delete(recordId);
         setSelectedRecordIds(newSet);
       }
+      fetchBillingDetails();
     }
+  };
+
+  // 批次移除收費設定
+  const handleBatchDeleteRecords = async () => {
+    if (selectedRecordIds.size === 0) return;
+    
+    const result = await Swal.fire({
+      title: '確定要移除嗎？',
+      text: `確定要移除這 ${selectedRecordIds.size} 位學生的設定嗎？`,
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#d33',
+      cancelButtonColor: '#3085d6',
+      confirmButtonText: '確定批次移除',
+      cancelButtonText: '取消'
+    });
+    
+    if (!result.isConfirmed) return;
+    
+    setIsProcessingBatch(true);
+    let successCount = 0;
+    const targetIds = Array.from(selectedRecordIds);
+
+    for (const recordId of targetIds) {
+      const error = await resetBillingRecord(recordId);
+      
+      if (!error) successCount++;
+    }
+
+    if (successCount === targetIds.length) {
+      Swal.fire({ title: '移除成功', text: '批次移除成功！', icon: 'success', timer: 1500, showConfirmButton: false });
+    } else {
+      Swal.fire({ title: '部分失敗', text: `完成操作，但有 ${targetIds.length - successCount} 筆失敗。`, icon: 'warning' });
+    }
+
+    fetchBillingDetails();
+    setSelectedRecordIds(new Set());
+    setIsProcessingBatch(false);
   };
 
   // 一鍵標記為已繳清
   const handleMarkAsPaid = async (record) => {
+    setProcessingRecordId(record.id);
     await handleUpdateRecord(record.id, { 
       amount_paid: record.amount_due,
-      status: 'paid' 
+      status: 'paid',
+      paid_at: batchPaidAt,
+      payment_method: batchPaymentMethod
     });
+    setProcessingRecordId(null);
+  };
+
+  const handleBatchMarkAsPaid = async () => {
+    if (selectedRecordIds.size === 0) return;
+    setIsProcessingBatch(true);
+    
+    let successCount = 0;
+    const updates = Array.from(selectedRecordIds).map(recordId => {
+      const record = records.find(r => r.id === recordId);
+      return {
+        id: recordId,
+        amount_paid: record?.amount_due || 0,
+        status: 'paid',
+        paid_at: batchPaidAt,
+        payment_method: batchPaymentMethod
+      };
+    });
+
+    for (const update of updates) {
+      const { error } = await supabase
+        .from('billing_records')
+        .update({ 
+          amount_paid: update.amount_paid,
+          status: update.status,
+          paid_at: update.paid_at,
+          payment_method: update.payment_method
+        })
+        .eq('id', update.id);
+      
+      if (!error) successCount++;
+    }
+
+    if (successCount === updates.length) {
+      Swal.fire({ title: '設定成功', text: '批次繳清成功！', icon: 'success' });
+    } else {
+      Swal.fire({ title: '部分失敗', text: `設定完成，但有 ${updates.length - successCount} 筆失敗，請重新整理後再試。`, icon: 'warning' });
+    }
+
+    fetchBillingDetails();
+    setSelectedRecordIds(new Set());
+    setIsProcessingBatch(false);
   };
 
   // 標記為未繳
   const handleMarkAsPending = async (record) => {
+    setProcessingRecordId(record.id);
     await handleUpdateRecord(record.id, { 
       amount_paid: 0,
-      status: 'pending' 
+      status: 'pending',
+      paid_at: null,
+      payment_method: null
     });
-  };
-
-  const handleSelectAll = (e) => {
-    if (e.target.checked) {
-      setSelectedRecordIds(new Set(records.map(r => r.id)));
-    } else {
-      setSelectedRecordIds(new Set());
-    }
+    setProcessingRecordId(null);
   };
 
   const handleSelectRecord = (id) => {
@@ -143,63 +325,154 @@ const BillingDetail = ({ cycleId, onBack }) => {
     setSelectedRecordIds(newSet);
   };
 
-  const applyPresetToSelected = async (presetAmount, isAdditive = true) => {
+  const applyItemsToSelected = async (items) => {
     if (selectedRecordIds.size === 0) {
-      alert('請先勾選要設定金額的學生！');
+      Swal.fire({ title: '注意', text: '請先勾選要新增明細的學生！', icon: 'warning' });
       return;
     }
 
     const targetIds = Array.from(selectedRecordIds);
-    
-    // Build an array of updates
-    const updates = targetIds.map(id => {
-      const record = records.find(r => r.id === id);
-      const newAmount = isAdditive ? Math.max(0, Number(record.amount_due) + presetAmount) : Math.max(0, presetAmount);
-      return { id, amount_due: newAmount };
-    });
+    const targetRecords = records.filter(record => targetIds.includes(record.id));
+    const itemsToInsert = targetRecords.flatMap(record => (
+      items.map((item, index) => ({
+        billing_record_id: record.id,
+        name: item.name,
+        amount: item.amount,
+        sort_order: getBillingItems(record).length + index
+      }))
+    ));
 
-    // Supabase doesn't support bulk update with different values easily in REST API, 
-    // but since we only update amount_due, we can do it one by one or 
-    // if all selected get the exact same new amount, we can bulk update.
-    // Wait, if it's additive, they might have different original amounts.
-    // To be safe and simple for < 100 records, loop and update.
-    setLoading(true);
-    let successCount = 0;
-    
-    for (const update of updates) {
-      const { error } = await supabase
-        .from('billing_records')
-        .update({ amount_due: update.amount_due })
-        .eq('id', update.id);
-      
-      if (!error) successCount++;
-    }
+    setIsProcessingBatch(true);
+    const { error } = await supabase
+      .from('billing_record_items')
+      .insert(itemsToInsert);
 
-    if (successCount === updates.length) {
-      alert('批次設定成功！');
+    if (!error) {
+      Swal.fire({ title: '新增成功', text: `已為 ${targetIds.length} 位學生新增 ${items.length} 筆明細！`, icon: 'success' });
     } else {
-      alert(`設定完成，但有 ${updates.length - successCount} 筆失敗，請重新整理後再試。`);
+      Swal.fire({ title: '新增失敗', text: error.message, icon: 'error' });
     }
 
-    // Refresh data
-    fetchBillingDetails();
+    await fetchBillingDetails();
+    setBatchItems([{ name: '', amount: '' }]);
+    setIsProcessingBatch(false);
+  };
+
+  const focusFeeComposerForRecord = (recordId) => {
+    setSelectedRecordIds(new Set([recordId]));
+    requestAnimationFrame(() => {
+      document.getElementById('billing-fee-composer')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
+  };
+
+  const handleApplyBatchItems = () => {
+    if (selectedRecordIds.size === 0) {
+      Swal.fire({ title: '注意', text: '請先勾選要新增明細的學生！', icon: 'warning' });
+      return;
+    }
+
+    const normalizedItems = batchItems.map(item => ({
+      name: item.name.trim(),
+      amount: Number(item.amount)
+    }));
+    const invalidItemIndex = batchItems.findIndex((item, index) => (
+      !item.name.trim() || !String(item.amount).trim() || !Number.isFinite(normalizedItems[index].amount)
+    ));
+
+    if (invalidItemIndex !== -1) {
+      Swal.fire({ title: '資料尚未完成', text: `請補齊第 ${invalidItemIndex + 1} 筆費用的名目與金額。`, icon: 'warning' });
+      return;
+    }
+
+    applyItemsToSelected(normalizedItems);
+  };
+
+  const handleUpdateBatchItem = (index, field, value) => {
+    setBatchItems(prev => prev.map((item, itemIndex) => (
+      itemIndex === index ? { ...item, [field]: value } : item
+    )));
+  };
+
+  const handleAddBatchItem = () => {
+    setBatchItems(prev => [...prev, { name: '', amount: '' }]);
+  };
+
+  const handleRemoveBatchItem = (index) => {
+    setBatchItems(prev => prev.length === 1 ? [{ name: '', amount: '' }] : prev.filter((_, itemIndex) => itemIndex !== index));
+  };
+
+  const handleAddPresetToBatch = (preset) => {
+    setBatchItems(prev => {
+      const emptyIndex = prev.findIndex(item => !item.name.trim() && !String(item.amount).trim());
+      const presetItem = { name: preset.name, amount: String(preset.amount) };
+      if (emptyIndex === -1) return [...prev, presetItem];
+      return prev.map((item, index) => index === emptyIndex ? presetItem : item);
+    });
+  };
+
+  const handleTabChange = (tab) => {
+    setActiveTab(tab);
     setSelectedRecordIds(new Set());
-    setBatchPrice('');
+    setBatchItems([{ name: '', amount: '' }]);
   };
 
-  const handleBatchUpdatePrice = () => {
-    if (batchPrice === '') {
-      alert('請輸入要套用的金額！');
+  const handleUpdateBillingItem = async (recordId, itemId, updates) => {
+    if (updates.name !== undefined && !updates.name.trim()) {
+      Swal.fire({ title: '更新失敗', text: '收費名目不可空白。', icon: 'error' });
+      fetchBillingDetails();
       return;
     }
-    const price = Number(batchPrice);
-    if (isNaN(price) || price < 0) {
-      alert('請輸入有效的金額！');
+    if (updates.amount !== undefined && (!String(updates.amount).trim() || !Number.isFinite(Number(updates.amount)))) {
+      Swal.fire({ title: '更新失敗', text: '請輸入有效金額。', icon: 'error' });
+      fetchBillingDetails();
       return;
     }
-    // Custom input is always overwrite (not additive)
-    applyPresetToSelected(price, false);
+
+    const normalizedUpdates = {
+      ...updates,
+      ...(updates.name !== undefined ? { name: updates.name.trim() } : {}),
+      ...(updates.amount !== undefined ? { amount: Number(updates.amount) } : {})
+    };
+
+    const { error } = await supabase
+      .from('billing_record_items')
+      .update(normalizedUpdates)
+      .eq('id', itemId)
+      .eq('billing_record_id', recordId);
+
+    if (error) {
+      Swal.fire({ title: '更新失敗', text: error.message, icon: 'error' });
+    } else {
+      fetchBillingDetails();
+    }
   };
+
+  const handleDeleteBillingItem = async (recordId, itemId) => {
+    const result = await Swal.fire({
+      title: '刪除這筆收費明細？',
+      text: '刪除後應繳總額會自動重新計算。',
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonText: '刪除',
+      cancelButtonText: '取消',
+      confirmButtonColor: '#d33'
+    });
+    if (!result.isConfirmed) return;
+
+    const { error } = await supabase
+      .from('billing_record_items')
+      .delete()
+      .eq('id', itemId)
+      .eq('billing_record_id', recordId);
+
+    if (error) {
+      Swal.fire({ title: '刪除失敗', text: error.message, icon: 'error' });
+    } else {
+      fetchBillingDetails();
+    }
+  };
+
+
 
   if (loading && !cycle) return <div style={{ padding: '40px', textAlign: 'center' }}>載入中...</div>;
   if (!cycle) return <div style={{ padding: '40px', textAlign: 'center' }}>找不到帳單資料</div>;
@@ -209,8 +482,42 @@ const BillingDetail = ({ cycleId, onBack }) => {
   const totalPaid = records.reduce((sum, r) => sum + Number(r.amount_paid), 0);
   const paidCount = records.filter(r => r.status === 'paid').length;
 
+  const displayRecords = records.filter(r => {
+    // 1. Tab filter
+    const assigned = isAssignedRecord(r);
+    if (activeTab === 'unassigned' && assigned) return false;
+    if (activeTab === 'assigned' && !assigned) return false;
+
+    // 2. Search filter
+    if (searchTerm && !r.students?.name.includes(searchTerm)) return false;
+
+    // 3. Status filter (only matters if tab is 'assigned')
+    if (activeTab === 'assigned' && filterStatus !== 'all') {
+      if (filterStatus === 'paid' && r.status !== 'paid') return false;
+      if (filterStatus === 'unpaid' && r.status === 'paid') return false;
+    }
+
+    return true;
+  });
+
+  const sortBillingRecords = (recordList) => [...recordList].sort((a, b) => {
+    if (activeTab === 'assigned') {
+      const diff = Number(b.amount_due) - Number(a.amount_due);
+      if (diff !== 0) return diff;
+    }
+    // 姓名筆畫排序 (繁體中文預設)
+    const nameA = a.students?.name || '';
+    const nameB = b.students?.name || '';
+    return nameA.localeCompare(nameB, 'zh-TW');
+  });
+
+  const sortedDisplayRecords = sortBillingRecords(displayRecords);
+
   if (showPrint) {
-    return <PrintEnvelope cycle={cycle} records={records} onClose={() => setShowPrint(false)} />;
+    const recordsToPrint = selectedRecordIds.size > 0 
+      ? sortBillingRecords(records.filter(r => selectedRecordIds.has(r.id)))
+      : sortedDisplayRecords;
+    return <PrintEnvelope cycle={cycle} records={recordsToPrint} onClose={() => setShowPrint(false)} />;
   }
 
   const handleExportExcel = () => {
@@ -224,9 +531,14 @@ const BillingDetail = ({ cycleId, onBack }) => {
         '年級': record.students?.grade || '',
         '班級': record.students?.class_name || '',
         '身分': record.students?.is_officer ? '幹部' : '一般',
+        '費用明細': getBillingItems(record)
+          .map(item => `${item.name}: ${item.amount >= 0 ? '+' : ''}${item.amount}`)
+          .join(' / '),
         '應繳金額': record.amount_due,
         '已繳金額': record.amount_paid,
-        '繳費狀態': statusText
+        '繳費狀態': statusText,
+        '繳清日期': record.paid_at || '',
+        '繳款方式': record.payment_method === 'cash' ? '現金' : (record.payment_method === 'transfer' ? '匯款' : '')
       };
     });
 
@@ -239,25 +551,35 @@ const BillingDetail = ({ cycleId, onBack }) => {
 
   return (
     <div style={{ marginTop: '10px' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+      <div className="scrollable-container" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', gap: '10px', overflowX: 'auto', paddingBottom: '10px', whiteSpace: 'nowrap' }}>
         <button 
           onClick={onBack}
-          style={{ background: 'transparent', border: '1px solid #666', color: '#ccc', padding: '6px 12px', borderRadius: '4px', cursor: 'pointer' }}
+          style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: '#ccc', padding: '8px 16px', borderRadius: '8px', cursor: 'pointer', flex: '0 0 auto', fontWeight: 'bold' }}
         >
           ← 返回帳單總覽
         </button>
-        <div style={{ display: 'flex', gap: '10px' }}>
+        <div style={{ display: 'flex', gap: '10px', flex: '0 0 auto' }}>
           <button 
-            onClick={handleExportExcel}
-            style={{ background: '#217346', color: '#fff', border: 'none', padding: '8px 16px', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}
+            onClick={handleSyncNewStudents}
+            disabled={isProcessingBatch}
+            style={{ 
+              background: 'rgba(96, 165, 250, 0.15)', 
+              color: '#60a5fa', 
+              border: '1px solid rgba(96, 165, 250, 0.3)', 
+              padding: '8px 16px', 
+              borderRadius: '8px', 
+              cursor: isProcessingBatch ? 'not-allowed' : 'pointer', 
+              fontWeight: 'bold',
+              opacity: isProcessingBatch ? 0.5 : 1
+            }}
           >
-            📊 匯出 Excel
+            🔄 同步新球員
           </button>
           <button 
-            onClick={() => setShowPrint(true)}
-            style={{ background: '#fbbc05', color: '#000', border: 'none', padding: '8px 16px', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}
+            onClick={handleExportExcel}
+            style={{ background: 'rgba(74, 222, 128, 0.15)', color: '#4ade80', border: '1px solid rgba(74, 222, 128, 0.3)', padding: '8px 16px', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold' }}
           >
-            🖨️ 列印全隊學費袋
+            📊 匯出 Excel
           </button>
         </div>
       </div>
@@ -265,16 +587,16 @@ const BillingDetail = ({ cycleId, onBack }) => {
       <div style={{ background: 'rgba(255,255,255,0.05)', padding: '24px', borderRadius: '12px', marginBottom: '20px' }}>
         <h2 style={{ margin: '0 0 15px 0', color: 'var(--primary-color)' }}>{cycle.name} - 繳費明細</h2>
         
-        <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap' }}>
-          <div style={{ background: 'rgba(0,0,0,0.2)', padding: '15px', borderRadius: '8px', minWidth: '150px' }}>
+        <div className="scrollable-container" style={{ display: 'flex', gap: '15px', overflowX: 'auto', paddingBottom: '10px' }}>
+          <div style={{ flex: '0 0 auto', background: 'rgba(0,0,0,0.2)', padding: '15px', borderRadius: '8px', minWidth: '130px' }}>
             <div style={{ fontSize: '0.9rem', color: '#aaa', marginBottom: '5px' }}>應收總額</div>
             <div style={{ fontSize: '1.5rem', fontWeight: 'bold' }}>${totalDue}</div>
           </div>
-          <div style={{ background: 'rgba(0,0,0,0.2)', padding: '15px', borderRadius: '8px', minWidth: '150px' }}>
+          <div style={{ flex: '0 0 auto', background: 'rgba(0,0,0,0.2)', padding: '15px', borderRadius: '8px', minWidth: '130px' }}>
             <div style={{ fontSize: '0.9rem', color: '#aaa', marginBottom: '5px' }}>已收總額</div>
             <div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#4ade80' }}>${totalPaid}</div>
           </div>
-          <div style={{ background: 'rgba(0,0,0,0.2)', padding: '15px', borderRadius: '8px', minWidth: '150px' }}>
+          <div style={{ flex: '0 0 auto', background: 'rgba(0,0,0,0.2)', padding: '15px', borderRadius: '8px', minWidth: '130px' }}>
             <div style={{ fontSize: '0.9rem', color: '#aaa', marginBottom: '5px' }}>繳款進度</div>
             <div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#60a5fa' }}>
               {paidCount} / {records.length} 人
@@ -285,137 +607,284 @@ const BillingDetail = ({ cycleId, onBack }) => {
 
       <div style={{ display: 'flex', gap: '10px', marginBottom: '20px', borderBottom: '1px solid var(--border)' }}>
         <button 
-          onClick={() => setActiveTab('unassigned')}
+          onClick={() => handleTabChange('unassigned')}
           style={{ 
             background: 'none', border: 'none', color: activeTab === 'unassigned' ? 'var(--primary-color)' : '#aaa', 
             padding: '10px 20px', fontSize: '1.1rem', fontWeight: 'bold', cursor: 'pointer',
             borderBottom: activeTab === 'unassigned' ? '3px solid var(--primary-color)' : '3px solid transparent'
           }}
         >
-          未設定費用 ({records.filter(r => r.amount_due === 0).length})
+          待加入費用 ({records.filter(r => !isAssignedRecord(r)).length})
         </button>
         <button 
-          onClick={() => setActiveTab('assigned')}
+          onClick={() => handleTabChange('assigned')}
           style={{ 
             background: 'none', border: 'none', color: activeTab === 'assigned' ? '#4ade80' : '#aaa', 
             padding: '10px 20px', fontSize: '1.1rem', fontWeight: 'bold', cursor: 'pointer',
             borderBottom: activeTab === 'assigned' ? '3px solid #4ade80' : '3px solid transparent'
           }}
         >
-          已設定明細 ({records.filter(r => r.amount_due > 0).length})
+          已設定明細 ({records.filter(r => isAssignedRecord(r)).length})
         </button>
       </div>
 
-      <div style={{ background: 'rgba(255,255,255,0.05)', padding: '15px 24px', borderRadius: '12px', marginBottom: '20px' }}>
-        <div style={{ display: 'flex', gap: '15px', alignItems: 'center', flexWrap: 'wrap', marginBottom: '15px' }}>
-          <div style={{ fontWeight: 'bold', color: 'var(--primary-color)' }}>批次分發收費</div>
-          <div style={{ color: '#aaa', fontSize: '0.9rem' }}>已勾選 {selectedRecordIds.size} 人</div>
+      <div id="billing-fee-composer" style={{ background: 'rgba(96,165,250,0.08)', padding: '20px 24px', borderRadius: '12px', marginBottom: '20px', border: '1px solid rgba(96,165,250,0.25)' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: '15px', alignItems: 'flex-start', flexWrap: 'wrap', marginBottom: '18px' }}>
+          <div>
+            <div style={{ fontWeight: 'bold', color: '#60a5fa', fontSize: '1.05rem' }}>新增費用明細</div>
+            <div style={{ color: '#aaa', fontSize: '0.9rem', marginTop: '5px' }}>先勾選學生，再一次加入一筆或多筆費用</div>
+          </div>
+          <div style={{ color: selectedRecordIds.size > 0 ? '#4ade80' : '#aaa', fontWeight: 'bold', fontSize: '0.95rem' }}>
+            {selectedRecordIds.size > 0 ? `目前已選 ${selectedRecordIds.size} 人` : '尚未選擇學生'}
+          </div>
         </div>
-        
-        <div style={{ display: 'flex', gap: '10px', alignItems: 'center', marginBottom: '15px', flexWrap: 'wrap' }}>
-          <select 
-            id="presetSelect"
-            style={{ 
-              flex: '1 1 200px', 
-              padding: '10px', 
-              borderRadius: '8px', 
-              border: '1px solid rgba(255,255,255,0.2)', 
-              background: 'rgba(0,0,0,0.2)', 
-              color: 'white',
-              fontSize: '1rem',
-              outline: 'none'
-            }}
-          >
-            <option value="" style={{ background: '#1a1a2e', color: '#fff' }}>-- 選擇收費項目 --</option>
-            {presets.map(p => (
-              <option key={p.id} value={p.amount} style={{ background: '#1a1a2e', color: '#fff' }}>
-                {p.name} ({p.amount >= 0 ? '+' : ''}{p.amount})
-              </option>
-            ))}
-          </select>
+
+        {presets.length > 0 && (
+          <div style={{ marginBottom: '15px' }}>
+            <div style={{ color: '#aaa', fontSize: '0.85rem', marginBottom: '8px' }}>快速加入常用項目</div>
+            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+              {presets.map(preset => (
+                <button
+                  key={preset.id}
+                  type="button"
+                  onClick={() => handleAddPresetToBatch(preset)}
+                  disabled={isProcessingBatch}
+                  style={{
+                    background: 'rgba(255,255,255,0.08)',
+                    color: '#ddd',
+                    border: '1px solid rgba(255,255,255,0.18)',
+                    borderRadius: '999px',
+                    padding: '6px 11px',
+                    cursor: isProcessingBatch ? 'not-allowed' : 'pointer',
+                    opacity: isProcessingBatch ? 0.5 : 1,
+                    fontSize: '0.85rem'
+                  }}
+                >
+                  {preset.name} ({preset.amount >= 0 ? '+' : ''}{preset.amount})
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '15px' }}>
+          {batchItems.map((item, index) => (
+            <div key={index} style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+              <span style={{ color: '#888', width: '20px', textAlign: 'center', fontSize: '0.85rem' }}>{index + 1}</span>
+              <input
+                type="text"
+                aria-label={`第 ${index + 1} 筆費用名稱`}
+                placeholder="費用名稱，例如：月費"
+                value={item.name}
+                onChange={e => handleUpdateBatchItem(index, 'name', e.target.value)}
+                style={{ flex: '1 1 180px', minWidth: '150px', padding: '10px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.2)', background: 'rgba(0,0,0,0.2)', color: 'white', outline: 'none' }}
+              />
+              <input
+                type="number"
+                step="0.01"
+                aria-label={`第 ${index + 1} 筆費用金額`}
+                placeholder="金額，可填負數"
+                value={item.amount}
+                onChange={e => handleUpdateBatchItem(index, 'amount', e.target.value)}
+                style={{ flex: '0 1 150px', minWidth: '120px', padding: '10px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.2)', background: 'rgba(0,0,0,0.2)', color: Number(item.amount) < 0 ? '#ff6b6b' : 'white', outline: 'none', textAlign: 'right' }}
+              />
+              <button
+                type="button"
+                onClick={() => handleRemoveBatchItem(index)}
+                disabled={batchItems.length === 1 || isProcessingBatch}
+                title="移除這筆費用"
+                style={{ background: 'transparent', border: 'none', color: batchItems.length === 1 ? '#555' : '#ff6b6b', padding: '7px', cursor: batchItems.length === 1 || isProcessingBatch ? 'not-allowed' : 'pointer', opacity: isProcessingBatch ? 0.5 : 1 }}
+              >
+                <Trash2 size={17} />
+              </button>
+            </div>
+          ))}
+        </div>
+
+        <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
           <button
-            onClick={() => {
-              const val = document.getElementById('presetSelect').value;
-              if (val) {
-                applyPresetToSelected(Number(val), true);
-              } else {
-                alert('請先選擇收費項目');
-              }
-            }}
-            disabled={selectedRecordIds.size === 0}
-            className="btn-primary"
-            style={{ 
-              padding: '10px 20px', 
-              opacity: selectedRecordIds.size > 0 ? 1 : 0.5,
-              cursor: selectedRecordIds.size > 0 ? 'pointer' : 'not-allowed',
-              whiteSpace: 'nowrap',
-              margin: 0
-            }}
+            type="button"
+            onClick={handleAddBatchItem}
+            disabled={isProcessingBatch}
+            style={{ background: 'transparent', color: '#60a5fa', border: '1px dashed rgba(96,165,250,0.6)', borderRadius: '8px', padding: '9px 13px', cursor: isProcessingBatch ? 'not-allowed' : 'pointer', opacity: isProcessingBatch ? 0.5 : 1, display: 'inline-flex', alignItems: 'center', gap: '6px' }}
           >
-            套用至已選
+            <Plus size={16} />
+            再加一筆費用
+          </button>
+          <button
+            type="button"
+            onClick={handleApplyBatchItems}
+            disabled={selectedRecordIds.size === 0 || isProcessingBatch}
+            className="btn-primary"
+            style={{ flex: '1 1 240px', padding: '10px 15px', opacity: selectedRecordIds.size > 0 && !isProcessingBatch ? 1 : 0.5, cursor: selectedRecordIds.size > 0 && !isProcessingBatch ? 'pointer' : 'not-allowed', margin: 0 }}
+          >
+            {isProcessingBatch ? '處理中...' : `套用 ${batchItems.length} 筆費用至 ${selectedRecordIds.size} 人`}
           </button>
         </div>
-          
-        <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'center', borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: '15px' }}>
-          <div style={{ display: 'flex', gap: '5px' }}>
-            <input 
-              type="number" 
-              placeholder="自訂覆蓋金額..."
-              value={batchPrice}
-              onChange={e => setBatchPrice(e.target.value)}
-              style={{ width: '130px', padding: '8px', borderRadius: '4px', border: '1px solid #555', background: 'rgba(0,0,0,0.2)', color: 'white' }}
+        <div style={{ color: '#888', fontSize: '0.82rem', marginTop: '10px' }}>
+          {selectedRecordIds.size === 0 ? '請往下點選學生卡片，或使用「全選目前列表」。' : '每一位已選學生都會收到上方的全部明細，總額會自動加總。'}
+        </div>
+      </div>
+
+      {activeTab === 'assigned' && (
+        <div style={{ background: 'rgba(255,255,255,0.05)', padding: '15px 24px', borderRadius: '12px', marginBottom: '20px' }}>
+          <div style={{ display: 'flex', gap: '15px', alignItems: 'center', flexWrap: 'wrap', marginBottom: '12px' }}>
+            <div style={{ fontWeight: 'bold', color: '#4ade80' }}>付款處理</div>
+            <div style={{ color: '#aaa', fontSize: '0.9rem' }}>選取學生後可一次標記為已繳清</div>
+          </div>
+          <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
+            <input
+              type="date"
+              aria-label="批次繳清日期"
+              value={batchPaidAt}
+              onChange={e => setBatchPaidAt(e.target.value)}
+              style={{ flex: '1 1 150px', padding: '10px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.2)', background: 'rgba(0,0,0,0.2)', color: 'white', outline: 'none' }}
             />
-            <button 
-              onClick={handleBatchUpdatePrice}
-              disabled={selectedRecordIds.size === 0}
-              style={{ background: selectedRecordIds.size > 0 ? 'var(--primary-color)' : '#555', color: '#fff', border: 'none', padding: '8px 16px', borderRadius: '4px', cursor: selectedRecordIds.size > 0 ? 'pointer' : 'not-allowed', fontWeight: 'bold' }}
+            <select
+              aria-label="批次付款方式"
+              value={batchPaymentMethod}
+              onChange={e => setBatchPaymentMethod(e.target.value)}
+              style={{ flex: '1 1 120px', padding: '10px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.2)', background: 'rgba(0,0,0,0.2)', color: 'white', outline: 'none' }}
             >
-              直接覆蓋
+              <option value="cash" style={{ background: '#1a1a2e' }}>現金</option>
+              <option value="transfer" style={{ background: '#1a1a2e' }}>匯款</option>
+            </select>
+            <button
+              onClick={handleBatchMarkAsPaid}
+              disabled={selectedRecordIds.size === 0 || isProcessingBatch}
+              className="btn-primary"
+              style={{ flex: '0 0 auto', padding: '10px 15px', opacity: selectedRecordIds.size > 0 && !isProcessingBatch ? 1 : 0.5, cursor: selectedRecordIds.size > 0 && !isProcessingBatch ? 'pointer' : 'not-allowed', margin: 0 }}
+            >
+              {isProcessingBatch ? '處理中...' : `批次繳清 ${selectedRecordIds.size > 0 ? `(${selectedRecordIds.size} 人)` : ''}`}
             </button>
           </div>
         </div>
-      </div>
+      )}
 
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
-        <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', color: '#ddd' }}>
-          <input 
-            type="checkbox" 
-            checked={
-              records.filter(r => activeTab === 'unassigned' ? r.amount_due === 0 : r.amount_due > 0).length > 0 && 
-              records.filter(r => activeTab === 'unassigned' ? r.amount_due === 0 : r.amount_due > 0).every(r => selectedRecordIds.has(r.id))
-            }
-            onChange={(e) => {
-              const visibleRecords = records.filter(r => activeTab === 'unassigned' ? r.amount_due === 0 : r.amount_due > 0);
-              if (e.target.checked) {
-                const newSet = new Set(selectedRecordIds);
-                visibleRecords.forEach(r => newSet.add(r.id));
-                setSelectedRecordIds(newSet);
-              } else {
-                const newSet = new Set(selectedRecordIds);
-                visibleRecords.forEach(r => newSet.delete(r.id));
-                setSelectedRecordIds(newSet);
-              }
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px', flexWrap: 'wrap', gap: '10px' }}>
+        <div style={{ display: 'flex', gap: '15px', alignItems: 'center' }}>
+          {activeTab === 'assigned' && (
+            <button
+              type="button"
+              onClick={() => {
+                if (selectedRecordIds.size === 0) {
+                  Swal.fire({
+                    title: '未勾選學生',
+                    text: '目前沒有勾選任何人，預設將會列印畫面上「所有」學生的學費袋。若想測試列印，請先勾選幾位學生喔！',
+                    icon: 'info',
+                    showCancelButton: true,
+                    confirmButtonText: '繼續列印全部',
+                    cancelButtonText: '我先去勾選',
+                    confirmButtonColor: '#4ade80',
+                    cancelButtonColor: '#6c757d',
+                  }).then((result) => {
+                    if (result.isConfirmed) setShowPrint(true);
+                  });
+                } else {
+                  setShowPrint(true);
+                }
+              }}
+              style={{ background: 'rgba(251, 191, 36, 0.15)', color: '#fbbf24', border: '1px solid rgba(251, 191, 36, 0.3)', padding: '8px 16px', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold' }}
+            >
+              🖨️ 列印學費袋
+            </button>
+          )}
+          <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', color: '#ddd' }}>
+            <input 
+              type="checkbox" 
+              checked={displayRecords.length > 0 && displayRecords.every(r => selectedRecordIds.has(r.id))}
+              onChange={(e) => {
+                if (e.target.checked) {
+                  const newSet = new Set(selectedRecordIds);
+                  displayRecords.forEach(r => newSet.add(r.id));
+                  setSelectedRecordIds(newSet);
+                } else {
+                  const newSet = new Set(selectedRecordIds);
+                  displayRecords.forEach(r => newSet.delete(r.id));
+                  setSelectedRecordIds(newSet);
+                }
+              }}
+              style={{ transform: 'scale(1.2)' }}
+            />
+            全選目前列表
+          </label>
+
+          {selectedRecordIds.size > 0 && (
+            <button
+              type="button"
+              onClick={() => setSelectedRecordIds(new Set())}
+              disabled={isProcessingBatch}
+              style={{ background: 'transparent', border: 'none', color: '#aaa', cursor: isProcessingBatch ? 'not-allowed' : 'pointer', padding: '4px 0', fontSize: '0.85rem', opacity: isProcessingBatch ? 0.5 : 1 }}
+            >
+              清除選取
+            </button>
+          )}
+
+          {activeTab === 'assigned' && selectedRecordIds.size > 0 && (
+            <button
+              onClick={handleBatchDeleteRecords}
+              disabled={isProcessingBatch}
+              style={{
+                background: 'transparent',
+                border: 'none',
+                color: '#ff6b6b',
+                cursor: isProcessingBatch ? 'not-allowed' : 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '5px',
+                padding: '4px 8px',
+                borderRadius: '6px',
+                opacity: isProcessingBatch ? 0.5 : 1
+              }}
+              title="批次移除選取的設定"
+            >
+              <Trash2 size={18} />
+              {isProcessingBatch && <span style={{ fontSize: '0.85rem' }}>處理中...</span>}
+            </button>
+          )}
+        </div>
+
+        <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+          {activeTab === 'assigned' && (
+            <select
+              value={filterStatus}
+              onChange={(e) => setFilterStatus(e.target.value)}
+              style={{
+                padding: '6px 12px',
+                borderRadius: '6px',
+                background: 'rgba(0,0,0,0.3)',
+                border: '1px solid rgba(255,255,255,0.2)',
+                color: 'white',
+                outline: 'none',
+                fontSize: '0.9rem'
+              }}
+            >
+              <option value="all" style={{ background: '#1a1a2e', color: 'white' }}>全部狀態</option>
+              <option value="unpaid" style={{ background: '#1a1a2e', color: 'white' }}>未繳費</option>
+              <option value="paid" style={{ background: '#1a1a2e', color: 'white' }}>已繳清</option>
+            </select>
+          )}
+          <input
+            type="text"
+            placeholder="搜尋目前列表"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            style={{
+              padding: '6px 12px',
+              borderRadius: '6px',
+              background: 'rgba(0,0,0,0.3)',
+              border: '1px solid rgba(255,255,255,0.2)',
+              color: 'white',
+              outline: 'none',
+              fontSize: '0.9rem',
+              width: '150px'
             }}
-            style={{ transform: 'scale(1.2)' }}
           />
-          全選本頁名單
-        </label>
+        </div>
       </div>
 
       <div style={{ display: 'grid', gap: '15px', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))' }}>
-        {records
-          .filter(r => activeTab === 'unassigned' ? r.amount_due === 0 : r.amount_due > 0)
-          .sort((a, b) => {
-            if (activeTab === 'assigned') {
-              const diff = Number(b.amount_due) - Number(a.amount_due);
-              if (diff !== 0) return diff;
-            }
-            // 姓名筆畫排序 (繁體中文預設)
-            const nameA = a.students?.name || '';
-            const nameB = b.students?.name || '';
-            return nameA.localeCompare(nameB, 'zh-TW');
-          })
-          .map(record => (
+        {sortedDisplayRecords.map(record => (
           <div 
             key={record.id} 
             style={{ 
@@ -465,9 +934,9 @@ const BillingDetail = ({ cycleId, onBack }) => {
               </div>
               <div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  {record.status === 'paid' && <span style={{ background: 'rgba(74,222,128,0.1)', color: '#4ade80', padding: '4px 8px', borderRadius: '4px', fontSize: '0.8rem', fontWeight: 'bold' }}>✓ 已繳清</span>}
-                  {record.status === 'pending' && <span style={{ background: 'rgba(255,107,107,0.1)', color: '#ff6b6b', padding: '4px 8px', borderRadius: '4px', fontSize: '0.8rem' }}>未繳</span>}
-                  {record.status === 'partially_paid' && <span style={{ background: 'rgba(251,188,5,0.1)', color: '#fbbc05', padding: '4px 8px', borderRadius: '4px', fontSize: '0.8rem' }}>部分繳納</span>}
+                  {activeTab === 'assigned' && record.status === 'paid' && <span style={{ background: 'rgba(74,222,128,0.1)', color: '#4ade80', padding: '4px 8px', borderRadius: '4px', fontSize: '0.8rem', fontWeight: 'bold' }}>✓ 已繳清</span>}
+                  {activeTab === 'assigned' && record.status === 'pending' && <span style={{ background: 'rgba(255,107,107,0.1)', color: '#ff6b6b', padding: '4px 8px', borderRadius: '4px', fontSize: '0.8rem' }}>未繳</span>}
+                  {activeTab === 'assigned' && record.status === 'partially_paid' && <span style={{ background: 'rgba(251,188,5,0.1)', color: '#fbbc05', padding: '4px 8px', borderRadius: '4px', fontSize: '0.8rem' }}>部分繳納</span>}
                   
                   {activeTab === 'assigned' && (
                     <button
@@ -488,7 +957,7 @@ const BillingDetail = ({ cycleId, onBack }) => {
                       }}
                       title="移除此設定"
                     >
-                      🗑️
+                      <Trash2 size={18} />
                     </button>
                   )}
                 </div>
@@ -499,20 +968,62 @@ const BillingDetail = ({ cycleId, onBack }) => {
               <>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '15px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ color: '#aaa', fontSize: '0.9rem' }}>應繳金額</span>
-                    <div style={{ display: 'flex', alignItems: 'center' }}>
-                      <span style={{ color: '#888', marginRight: '5px' }}>$</span>
-                      <input 
-                        type="number" 
-                        value={record.amount_due}
-                        onChange={(e) => {
-                          const val = Number(e.target.value);
-                          setRecords(prev => prev.map(r => r.id === record.id ? { ...r, amount_due: val } : r));
-                        }}
-                        onBlur={(e) => handleUpdateRecord(record.id, { amount_due: Number(e.target.value) })}
-                        style={{ width: '80px', padding: '6px', background: 'rgba(0,0,0,0.3)', border: '1px solid #555', color: 'white', borderRadius: '6px', textAlign: 'right' }}
-                      />
-                    </div>
+                    <span style={{ color: '#aaa', fontSize: '0.9rem' }}>應繳總額（明細自動加總）</span>
+                    <strong style={{ color: record.amount_due < 0 ? '#ff6b6b' : '#fff' }}>${record.amount_due}</strong>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                    {getBillingItems(record).map(item => (
+                      <div key={item.id} style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 90px 32px', gap: '6px', alignItems: 'center' }}>
+                        <input
+                          type="text"
+                          value={item.name}
+                          onChange={(e) => {
+                            const value = e.target.value;
+                            setRecords(prev => prev.map(r => r.id === record.id ? {
+                              ...r,
+                              billing_record_items: getBillingItems(r).map(currentItem => currentItem.id === item.id ? { ...currentItem, name: value } : currentItem)
+                            } : r));
+                          }}
+                          onBlur={(e) => handleUpdateBillingItem(record.id, item.id, { name: e.target.value })}
+                          style={{ width: '100%', padding: '6px', background: 'rgba(0,0,0,0.3)', border: '1px solid #555', color: 'white', borderRadius: '6px' }}
+                        />
+                        <input
+                          type="number"
+                          step="0.01"
+                          value={item.amount}
+                          onChange={(e) => {
+                            const value = e.target.value;
+                            setRecords(prev => prev.map(r => r.id === record.id ? {
+                              ...r,
+                              billing_record_items: getBillingItems(r).map(currentItem => currentItem.id === item.id ? { ...currentItem, amount: value } : currentItem)
+                            } : r));
+                          }}
+                          onBlur={(e) => handleUpdateBillingItem(record.id, item.id, { amount: e.target.value })}
+                          style={{ width: '100%', padding: '6px', background: 'rgba(0,0,0,0.3)', border: '1px solid #555', color: Number(item.amount) < 0 ? '#ff6b6b' : 'white', borderRadius: '6px', textAlign: 'right' }}
+                        />
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeleteBillingItem(record.id, item.id);
+                          }}
+                          title="刪除收費明細"
+                          style={{ background: 'transparent', border: 'none', color: '#ff6b6b', cursor: 'pointer', padding: '4px' }}
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
+                    ))}
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        focusFeeComposerForRecord(record.id);
+                      }}
+                      style={{ alignSelf: 'flex-start', background: 'transparent', border: '1px dashed rgba(96,165,250,0.6)', color: '#60a5fa', padding: '5px 10px', borderRadius: '6px', cursor: 'pointer', fontSize: '0.85rem' }}
+                    >
+                      + 加入另一筆費用
+                    </button>
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <span style={{ color: '#aaa', fontSize: '0.9rem' }}>已繳金額</span>
@@ -537,20 +1048,92 @@ const BillingDetail = ({ cycleId, onBack }) => {
                   </div>
                 </div>
 
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', marginBottom: '15px' }}>
+                  <span style={{ color: '#aaa', fontSize: '0.9rem' }}>備註 (如：400x6(時段) = 2400)</span>
+                  <input 
+                    type="text" 
+                    value={record.note || ''}
+                    placeholder="輸入對帳備註..."
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setRecords(prev => prev.map(r => r.id === record.id ? { ...r, note: val } : r));
+                    }}
+                    onBlur={(e) => {
+                      handleUpdateRecord(record.id, { note: e.target.value });
+                    }}
+                    style={{ width: '100%', padding: '6px', background: 'rgba(0,0,0,0.3)', border: '1px solid #555', color: 'white', borderRadius: '6px' }}
+                  />
+                </div>
+
+                {record.status === 'paid' && (
+                  <div style={{ display: 'flex', gap: '10px', marginBottom: '15px' }}>
+                    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '5px' }}>
+                      <span style={{ color: '#aaa', fontSize: '0.9rem' }}>繳清日期</span>
+                      <input 
+                        type="date"
+                        value={record.paid_at || ''}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setRecords(prev => prev.map(r => r.id === record.id ? { ...r, paid_at: val } : r));
+                        }}
+                        onBlur={(e) => handleUpdateRecord(record.id, { paid_at: e.target.value })}
+                        style={{ padding: '6px', background: 'rgba(0,0,0,0.3)', border: '1px solid #555', color: 'white', borderRadius: '6px', width: '100%' }}
+                      />
+                    </div>
+                    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '5px' }}>
+                      <span style={{ color: '#aaa', fontSize: '0.9rem' }}>付款方式</span>
+                      <select 
+                        value={record.payment_method || ''}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setRecords(prev => prev.map(r => r.id === record.id ? { ...r, payment_method: val } : r));
+                          handleUpdateRecord(record.id, { payment_method: val });
+                        }}
+                        style={{ padding: '6px', background: 'rgba(0,0,0,0.3)', border: '1px solid #555', color: 'white', borderRadius: '6px', width: '100%' }}
+                      >
+                        <option value="" style={{ background: '#1a1a2e' }}>未指定</option>
+                        <option value="cash" style={{ background: '#1a1a2e' }}>現金</option>
+                        <option value="transfer" style={{ background: '#1a1a2e' }}>匯款</option>
+                      </select>
+                    </div>
+                  </div>
+                )}
+
                 <div style={{ borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: '15px', textAlign: 'right' }}>
                   {record.status !== 'paid' ? (
                     <button 
                       onClick={() => handleMarkAsPaid(record)}
-                      style={{ background: 'rgba(74,222,128,0.2)', color: '#4ade80', border: '1px solid #4ade80', padding: '6px 16px', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', width: '100%' }}
+                      disabled={processingRecordId === record.id}
+                      style={{ 
+                        background: 'rgba(74,222,128,0.2)', 
+                        color: '#4ade80', 
+                        border: '1px solid #4ade80', 
+                        padding: '6px 16px', 
+                        borderRadius: '6px', 
+                        cursor: processingRecordId === record.id ? 'not-allowed' : 'pointer', 
+                        fontWeight: 'bold', 
+                        width: '100%',
+                        opacity: processingRecordId === record.id ? 0.7 : 1
+                      }}
                     >
-                      一鍵繳清
+                      {processingRecordId === record.id ? '處理中...' : '一鍵繳清'}
                     </button>
                   ) : (
                     <button 
                       onClick={() => handleMarkAsPending(record)}
-                      style={{ background: 'transparent', color: '#ff6b6b', border: '1px solid rgba(255,107,107,0.5)', padding: '6px 16px', borderRadius: '6px', cursor: 'pointer', width: '100%' }}
+                      disabled={processingRecordId === record.id}
+                      style={{ 
+                        background: 'transparent', 
+                        color: '#ff6b6b', 
+                        border: '1px solid rgba(255,107,107,0.5)', 
+                        padding: '6px 16px', 
+                        borderRadius: '6px', 
+                        cursor: processingRecordId === record.id ? 'not-allowed' : 'pointer', 
+                        width: '100%',
+                        opacity: processingRecordId === record.id ? 0.7 : 1
+                      }}
                     >
-                      取消繳清
+                      {processingRecordId === record.id ? '處理中...' : '取消繳清'}
                     </button>
                   )}
                 </div>

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import Swal from 'sweetalert2';
 import { supabase } from '../config/supabaseClient';
 
 const FeePresetsSettings = ({ teamId }) => {
@@ -42,7 +43,7 @@ const FeePresetsSettings = ({ teamId }) => {
       }]);
 
     if (error) {
-      alert('新增失敗: ' + error.message);
+      Swal.fire({ title: '新增失敗', text: error.message, icon: 'error' });
     } else {
       setNewPreset({ name: '', amount: 0 });
       fetchPresets();
@@ -51,7 +52,17 @@ const FeePresetsSettings = ({ teamId }) => {
   };
 
   const handleDeletePreset = async (id) => {
-    if (!window.confirm('確定要刪除此收費標籤嗎？')) return;
+    const result = await Swal.fire({
+      title: '確定要刪除嗎？',
+      text: '確定要刪除此收費標籤嗎？',
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#d33',
+      cancelButtonColor: '#3085d6',
+      confirmButtonText: '確定刪除',
+      cancelButtonText: '取消'
+    });
+    if (!result.isConfirmed) return;
     setLoading(true);
     const { error } = await supabase
       .from('fee_presets')
@@ -59,7 +70,7 @@ const FeePresetsSettings = ({ teamId }) => {
       .eq('id', id);
 
     if (error) {
-      alert('刪除失敗: ' + error.message);
+      Swal.fire({ title: '刪除失敗', text: error.message, icon: 'error' });
     } else {
       fetchPresets();
     }

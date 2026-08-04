@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import Swal from 'sweetalert2';
 import { supabase } from '../config/supabaseClient';
 import { useAuth } from '../contexts/AuthContext';
 import TeamManagement from '../components/TeamManagement';
@@ -45,27 +46,39 @@ const Dashboard = () => {
   }, [activeTab, teamSubTabs, adminRoles]);
 
   const handleCreateTeam = async () => {
-    const teamName = window.prompt('請輸入新球隊名稱：');
+    const { value: teamName } = await Swal.fire({
+      title: '請輸入新球隊名稱',
+      input: 'text',
+      showCancelButton: true,
+      confirmButtonText: '確定',
+      cancelButtonText: '取消'
+    });
     if (!teamName) return;
     
     const { error } = await supabase.rpc('create_new_team', { new_team_name: teamName });
     if (error) {
-      alert('建立失敗：' + error.message);
+      Swal.fire({ title: '建立失敗', text: error.message, icon: 'error' });
     } else {
-      alert('球隊建立成功！請重新整理頁面。');
+      await Swal.fire({ title: '建立成功', text: '球隊建立成功！請重新整理頁面。', icon: 'success' });
       window.location.reload();
     }
   };
 
   const handleJoinTeam = async () => {
-    const code = window.prompt('請輸入邀請碼：');
+    const { value: code } = await Swal.fire({
+      title: '請輸入邀請碼',
+      input: 'text',
+      showCancelButton: true,
+      confirmButtonText: '確定',
+      cancelButtonText: '取消'
+    });
     if (!code) return;
     
     const { error } = await supabase.rpc('join_team_by_code', { invite_code: code });
     if (error) {
-      alert('加入失敗：' + error.message);
+      Swal.fire({ title: '加入失敗', text: error.message, icon: 'error' });
     } else {
-      alert('成功加入球隊！請重新整理頁面。');
+      await Swal.fire({ title: '加入成功', text: '成功加入球隊！請重新整理頁面。', icon: 'success' });
       window.location.reload();
     }
   };
