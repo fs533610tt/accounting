@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Navigate, Outlet } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../config/supabaseClient';
+import BackToTop from '../components/BackToTop';
 
 const AdminLayout = () => {
   const { user, isSuperAdmin, userRoles, logout } = useAuth();
@@ -91,6 +92,9 @@ const AdminLayout = () => {
       <footer style={{ textAlign: 'center', padding: '16px', color: '#666', fontSize: '0.8rem' }}>
         部署版本時間：{__APP_VERSION__}
       </footer>
+      
+      {/* 回到頂部按鈕 */}
+      <BackToTop />
     </div>
   );
 };
